@@ -1,9 +1,31 @@
-"""Shared synthetic PSM metadata for API and browser regression checks."""
+"""Prepare synthetic projects and PSM metadata for API and browser regression checks."""
 
 import json
+from time import monotonic, sleep
+
+from fastapi.testclient import TestClient
 
 from mzloupe.services.identifications import IdentificationImporter
 from mzloupe.storage.catalog import ProjectCatalog
+
+
+def wait_for_project(client: TestClient, timeout_seconds: float = 30.0) -> None:
+    """Wait for background preparation, reporting real failures or a bounded timeout."""
+    deadline = monotonic() + timeout_seconds
+    while True:
+        response = client.get("/api/status")
+        response.raise_for_status()
+        status = response.json()
+        if status["state"] == "ready":
+            return
+        if status["state"] != "preparing":
+            raise RuntimeError(f"Test project preparation failed: {status}")
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                f"Test project was not ready after {timeout_seconds:g} seconds: {status}"
+            )
+        sleep(min(0.05, remaining))
 
 
 def seed_psm_rows(catalog: ProjectCatalog) -> None:
