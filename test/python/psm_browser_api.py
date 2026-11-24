@@ -4,13 +4,12 @@ import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
-import time
 
 from fastapi.testclient import TestClient
+from psm_fixtures import seed_psm_rows, wait_for_project
 
 from mzloupe.app import create_app
 from mzloupe.demo import DemoProject
-from psm_fixtures import seed_psm_rows
 
 
 def main() -> None:
@@ -20,13 +19,7 @@ def main() -> None:
         manifest = DemoProject().write(root / "data")
         app = create_app(root / "cache", manifest)
         with TestClient(app) as client:
-            for _ in range(100):
-                state = client.get("/api/status").json()
-                if state["state"] != "preparing":
-                    break
-                time.sleep(0.02)
-            if state["state"] != "ready":
-                raise RuntimeError(state)
+            wait_for_project(client)
             seed_psm_rows(app.state.runtime.active[1])
             print("MZLOUPE_READY", flush=True)
             for line in sys.stdin:
