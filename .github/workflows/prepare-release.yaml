@@ -73,10 +73,10 @@ jobs:
           VERSION: ${{ steps.get-next-version.outputs.next_version }}
 
       - name: Synchronize frontend versions
-        run: python scripts/sync_versions.py
+        run: python .github/scripts/sync_versions.py
 
       - name: Check package versions
-        run: python scripts/sync_versions.py --check
+        run: python .github/scripts/sync_versions.py --check
 
       - name: Update the changelog
         id: bump-changelog

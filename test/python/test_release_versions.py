@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "sync_versions.py"
+SCRIPT = Path(__file__).resolve().parents[2] / ".github" / "scripts" / "sync_versions.py"
 
 
 @pytest.fixture(name="checkout")

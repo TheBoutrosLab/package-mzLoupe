@@ -65,13 +65,13 @@ Regular PRs should not bump package versions. Check that the package metadata
 agrees with:
 
 ```sh
-python scripts/sync_versions.py --check
+python .github/scripts/sync_versions.py --check
 ```
 
 After intentionally changing `project.version`, synchronize the frontend with:
 
 ```sh
-python scripts/sync_versions.py
+python .github/scripts/sync_versions.py
 ```
 
 The script preserves JSON formatting and dependency versions. It needs only

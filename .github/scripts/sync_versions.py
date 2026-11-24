@@ -94,7 +94,7 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parents[1],
+        default=Path(__file__).resolve().parents[2],
         help="Checkout directory containing pyproject.toml (default: this script's checkout).",
     )
     parser.add_argument(
@@ -117,7 +117,7 @@ def main() -> int:
     for path in changed:
         print(f"{action}: {path.relative_to(versions.root)} (expected {versions.version})")
     if args.check:
-        print("Run python scripts/sync_versions.py to synchronize frontend package versions.")
+        print("Run python .github/scripts/sync_versions.py to synchronize versions.")
         return 1
     return 0
 

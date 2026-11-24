@@ -53,7 +53,7 @@ include = [
     "/web/tsconfig.json",
     "/web/index.html",
     "/test",
-    "/scripts",
+    "/.github/scripts",
     "/README.md",
     "/docs/*.md",
     "/docs/assets/logo/mzloupe-logo-on-light.svg",

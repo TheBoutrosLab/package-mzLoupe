@@ -28,7 +28,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Check Python and frontend versions
-        run: python scripts/sync_versions.py --check
+        run: python .github/scripts/sync_versions.py --check
 
       - name: Run tests
         run: |
