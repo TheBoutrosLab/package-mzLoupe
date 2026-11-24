@@ -305,3 +305,41 @@ work/
 *.temp
 *.xlk
 *.~vsd*
+
+# Local design notes
+/docs/local/
+
+# Local application builds and data
+node_modules/
+/web/dist/
+/mzloupe/static/
+/mzloupe/_version.py
+/demo-data/
+/.venv/
+
+/.mzloupe-cache/
+
+# Locally built wheels, including copies outside dist/
+*.whl
+
+# Catalogs and SQLite journals may live outside the default cache directory.
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Frontend caches and generated test reports
+.vite/
+*.tsbuildinfo
+/web/coverage/
+playwright-report/
+test-results/
+/junit/
+
+# Local environment overrides; keep shareable templates available.
+.env.*
+!.env.example
+!.env.*.example
+
+# Documentation branding is source material, not a generated screenshot.
+!/docs/assets/logo/*.png

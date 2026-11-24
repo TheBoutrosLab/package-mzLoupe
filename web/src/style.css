@@ -1,0 +1,402 @@
+:root {
+  color: #172d40;
+  background: #f3f6f9;
+  font-synthesis: none;
+}
+body {
+  margin: 0;
+}
+* {
+  box-sizing: border-box;
+}
+.dashboard {
+  max-width: 1920px;
+  margin: auto;
+}
+.application > header {
+  height: 82px;
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  background: #102d3c;
+  color: white;
+}
+.brand {
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+}
+.brand img {
+  display: block;
+  height: 44px;
+  width: auto;
+}
+.brand span {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  font-weight: 500;
+  color: #9cb9c6;
+}
+.project-name {
+  font-size: 17px;
+  color: #e1edf0;
+}
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header-actions a {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  color: #fff;
+  text-decoration: none;
+}
+.header-actions a:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.header-actions a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.header-actions svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+@media (max-width: 1000px) {
+  .application header {
+    height: auto;
+    min-height: 82px;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 24px;
+  }
+}
+.loadbar {
+  padding: 16px 28px;
+  background: white;
+  border-bottom: 1px solid #dce5eb;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.loadbar > div {
+  width: min(620px, 65vw);
+}
+.loadbar > span {
+  color: #778692;
+  font-size: 13px;
+}
+.toolbar {
+  padding: 20px 28px 12px;
+  display: flex;
+  align-items: end;
+  gap: 18px;
+}
+.toolbar .mantine-Select-root {
+  width: 250px;
+}
+.toolbar button {
+  margin-left: auto;
+}
+.overview {
+  padding: 4px 28px 22px;
+}
+.overview-heading {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.overview-heading span {
+  font-size: 13px;
+  color: #637587;
+}
+h2 {
+  font-size: 16px;
+  margin: 0;
+  font-weight: 650;
+}
+h3 {
+  font-size: 14px;
+  margin: 12px 0;
+}
+.fraction-cards {
+  display: flex;
+  gap: 12px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.fraction {
+  min-width: 205px;
+  text-align: left;
+  background: white;
+  border: 1px solid #d7e0e7;
+  border-radius: 5px;
+  padding: 14px 18px;
+  cursor: pointer;
+  color: inherit;
+}
+.fraction b {
+  font-size: 17px;
+}
+.fraction span,
+.fraction strong {
+  display: block;
+  font-size: 13px;
+  margin-top: 5px;
+}
+.fraction span {
+  color: #6c7e8c;
+}
+.fraction.active {
+  border-color: #008979;
+  box-shadow: inset 3px 0 #008979;
+}
+.rate {
+  height: 4px;
+  background: #edf2f6;
+  margin-top: 12px;
+  border-radius: 4px;
+}
+.rate i {
+  display: block;
+  height: 100%;
+  background: #008979;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(380px, 1fr);
+  gap: 18px;
+  padding: 0 28px;
+  align-items: start;
+}
+.explorer {
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+.panel {
+  background: white;
+  border: 1px solid #dce5eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.panel-title {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #edf1f5;
+}
+.panel-title > span,
+.panel-title > div > span,
+.caption {
+  color: #6e7f8c;
+  font-size: 12px;
+}
+.panel-title .mantine-Select-root {
+  width: 110px;
+}
+.plot {
+  width: 100%;
+  height: 290px;
+  min-width: 0;
+}
+.map-panel .plot {
+  height: 350px;
+}
+.map-panel > .panel-title {
+  flex-wrap: wrap;
+}
+.caption {
+  margin: 10px 18px 14px;
+}
+.extraction {
+  padding: 14px 18px 0;
+}
+.extraction .mantine-NumberInput-root {
+  max-width: 165px;
+}
+.inspector {
+  resize: horizontal;
+  min-width: 0;
+}
+.inspector h3 {
+  padding: 0 18px;
+}
+.scan-info {
+  padding: 18px;
+}
+.scan-info strong {
+  display: block;
+  font-size: 22px;
+}
+.scan-info span {
+  display: block;
+  color: #617687;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.tolerance {
+  width: 195px;
+  margin: 0 18px;
+}
+.inspector table {
+  margin-bottom: 20px;
+}
+table {
+  font-size: 13px;
+}
+td {
+  cursor: pointer;
+}
+td small {
+  display: block;
+  color: #778794;
+}
+.selected {
+  background: #e4f3ef !important;
+}
+.empty {
+  padding: 90px 35px;
+  color: #768897;
+  line-height: 1.8;
+  text-align: center;
+}
+.empty.small {
+  padding: 54px 24px;
+}
+.results {
+  margin: 20px 28px;
+}
+.results .panel-title .mantine-Select-root {
+  width: 200px;
+}
+.results > .mantine-Group-root {
+  padding: 10px;
+  font-size: 13px;
+}
+.welcome {
+  max-width: 760px;
+  margin: 100px auto;
+  padding: 20px;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 2px;
+  color: #008979;
+}
+h1 {
+  font-size: 44px;
+  letter-spacing: -1.7px;
+  margin: 12px 0;
+}
+.welcome p {
+  font-size: 17px;
+  line-height: 1.8;
+  color: #617687;
+}
+pre {
+  background: #e5ecf1;
+  border-radius: 5px;
+  padding: 20px;
+  line-height: 1.8;
+}
+footer {
+  padding: 20px 28px;
+  color: #81909d;
+  font-size: 12px;
+}
+footer span {
+  float: right;
+}
+@media (max-width: 1000px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .project-name {
+    display: none;
+  }
+  .results {
+    overflow: auto;
+  }
+}
+
+/* A shared peptide never expands the table to fit its full protein list. */
+.protein-cell {
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+}
+.protein-accessions {
+  width: 160px;
+}
+.protein-accessions-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  color: #007f68;
+}
+.protein-representative {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.protein-count {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.protein-accession-list {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding-left: 20px;
+  user-select: text;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.protein-group-details {
+  max-height: 260px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.protein-popover {
+  max-height: 75vh;
+  overflow: auto;
+}
+
+/* DataTable handles scrolling/paging; column popovers remain above its viewport. */
+.psm-datatable {
+  font-size: 13px;
+}
+.psm-filter-summary {
+  padding: 6px 18px;
+  border-bottom: 1px solid #edf1f5;
+}
+.psm-datatable .mantine-datatable-header-cell-sortable-icon,
+.psm-datatable .mantine-datatable-header-cell-sortable-unsorted-icon,
+.psm-datatable .mantine-datatable-header-cell-filter-action-icon {
+  color: #000;
+}
+.psm-datatable .mantine-datatable-header-cell-filter-action-icon[data-active] {
+  color: #007f68;
+  border-color: #007f68;
+}
+.results .panel-title {
+  flex-wrap: wrap;
+}

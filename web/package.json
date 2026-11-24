@@ -1,0 +1,45 @@
+{
+    "name": "mzloupe-web",
+    "version": "0.1.0",
+    "license": "BSD-3-Clause",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build && node scripts/BundledLicenses.mjs",
+        "test": "node --test ../test/web/*.test.mjs",
+        "test:contrast-ui": "node ../test/web/heatmap-contrast.mjs",
+        "test:server-save-ui": "node ../test/web/server-project-save.mjs",
+        "test:proteins-ui": "node ../test/web/protein-accessions.mjs",
+        "test:grouping-ui": "node ../test/web/protein-grouping.mjs",
+        "test:psm-ui": "node ../test/web/psm-table.mjs",
+        "test:requests-ui": "node ../test/web/request-cancellation.mjs"
+    },
+    "dependencies": {
+        "@mantine/core": "^8.3.0",
+        "@mantine/hooks": "^8.3.0",
+        "@tabler/icons-react": "^3.52.0",
+        "clsx": "^2.1.1",
+        "mantine-datatable": "^8.3.13",
+        "plotly.js-dist-min": "^3.1.0",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.56.0",
+        "@types/plotly.js": "^3.0.0",
+        "@types/react": "^19.1.0",
+        "@types/react-dom": "^19.1.0",
+        "@vitejs/plugin-react": "^5.0.0",
+        "typescript": "^5.9.0",
+        "vite": "^7.1.0"
+    },
+    "homepage": "https://github.com/TheBoutrosLab/package-mzLoupe",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/TheBoutrosLab/package-mzLoupe.git"
+    },
+    "bugs": {
+        "url": "https://github.com/TheBoutrosLab/package-mzLoupe/issues"
+    }
+}

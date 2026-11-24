@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
-          - "3.10"
+          - "3.11"
           - "3.12"
 
     steps:
@@ -26,6 +26,9 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Check Python and frontend versions
+        run: python scripts/sync_versions.py --check
 
       - name: Run tests
         run: |

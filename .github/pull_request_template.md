@@ -3,8 +3,8 @@
 
 ### Closes #...  <!-- edit if this PR closes an Issue -->
 
-<!-- 
-Admin/maintainer: please edit the 'Pipeline Run Results' or 'Analysis Results' sections as needed for your project repo.  
+<!--
+Admin/maintainer: please edit the 'Pipeline Run Results' or 'Analysis Results' sections as needed for your project repo.
 Then commit/push the changes so everyone uses this template for future PRs.
 
 For example, if your project is a `pipeline`, then create a 'Pipeline Run Results' section.
@@ -17,7 +17,7 @@ code from each PR to help prevent creating new bugs.
 <!--- Please read each of the following items and confirm by replacing the [ ] with a [X] --->
 
 - [ ] This PR **does *NOT* contain** Protected Health Information [(PHI)](https://www.hhs.gov/hipaa/for-professionals/privacy/laws-regulations/index.html). A repo may ***need to be deleted*** if such data is uploaded. <br> Disclosing PHI is a ***major problem***[^1] - Even ***a small leak can be costly***[^2].
-  
+
 - [ ] This PR **does *NOT* contain** germline genetic data[^3], RNA-Seq, DNA methylation, microbiome or other molecular data[^4].
 
 [^1]: [UCLA Health reaches $7.5m settlement over 2015 breach of 4.5m patient records](https://healthitsecurity.com/news/ucla-health-reaches-7.5m-settlement-over-2015-breach-of-4.5m)
@@ -33,29 +33,30 @@ _&emsp; To automatically exclude such files using a [.gitignore](https://docs.gi
 
 - [ ] I have read the [code review guidelines](https://solid-adventure-l491og6.pages.github.io/latest/code-review-guidelines) and the [code review best practice on GitHub check-list](https://solid-adventure-l491og6.pages.github.io/latest/code-review-best-practices).
 
-- [ ] I have set up the branch protection rules before opening this pull request, or the branch protection rule has already been set up.
-
 - [ ] The name of the branch is meaningful and well formatted following the [standards](https://solid-adventure-l491og6.pages.github.io/latest/code-review-best-practices), using \[AD_username (or 5 letters of AD if AD is too long)]-\[brief_description_of_branch].
 
-- [ ] I have added the major changes included in this pull request to the `CHANGELOG.md` under the next release version or unreleased, and updated the date.
 
-### File Updates
+### Documentation
 
-- [ ] I have ensured that the version number update follows the [semantic versioning standards](http://semver.org/).
+- [ ] I have updated the documentation and dependency requirements where needed.
+- [ ] I have documented relevant user-facing work in `CHANGELOG.md`.
 
-- [ ] I have updated the version number/requirements and added my name to the author list in the `pyproject.toml`.
-
-- [ ] I have updated the version number/feature changes in the `README.md`.
-
-- [ ] I have added the changes included in this pull request to the `CHANGELOG.md` under the next release version or unreleased, and updated the date.
-
-<!---If any previous versions have bugs, add "deprecated" in the version tag and list the bug in the corresponding release--->
-- [ ] I have drafted the new version release with any additions/changes and have linked the `CHANGELOG.md` in the release. 
+<!--
+Package version bumps are handled by the Prepare new release workflow.
+pyproject.toml is the source of truth; frontend versions are synchronized
+in the same release PR and checked in CI.
+Finalize release runs when its automated release PR is merged.
+Regular PRs should not manually bump package versions, set release dates,
+create release tags, or draft GitHub releases.
+-->
 
 ### Testing
 
-- [ ] I have added unit tests for the new feature(s).
+<!-- List the checks run and their results; explain any checks that do not apply. -->
 
-- [ ] I modified the integration test(s) to include the new feature.
+- [ ] I have added or updated tests where needed.
+- [ ] Relevant Python and frontend checks passed locally and/or in CI.
 
-- [ ] All existing tests for [this tool] passed locally and/or on the cluster.
+Checks run and results:
+
+<!-- Commands, outcomes, or a short explanation for documentation-only changes. -->
