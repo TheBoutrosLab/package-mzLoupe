@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import test from "node:test";
 
-const require = createRequire(new URL("../../web/package.json", import.meta.url));
+const require = createRequire(new URL("../../../web/package.json", import.meta.url));
 const typescript = require("typescript");
 const source = await readFile(
-  new URL("../../web/src/HeatmapContrast.ts", import.meta.url),
+  new URL("../../../web/src/HeatmapContrast.ts", import.meta.url),
   "utf8"
 );
 const compiled = typescript.transpileModule(source, {

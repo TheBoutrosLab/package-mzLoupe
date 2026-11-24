@@ -51,7 +51,8 @@ Initial release.
 - mzLoupe branding, Tabler icons, and links to the GitHub repository and issue
   reporting form.
 - Vite live development, Python and frontend regression tests, browser workflow
-  checks, and Python static-analysis configuration.
+  checks, dedicated frontend CI with failure screenshots, and Python static-analysis
+  configuration.
 - Automated release preparation with synchronized Python and frontend package
   versions and a CI check for version consistency.
 - BSD-3-Clause licensing with the Sanford Burnham Prebys Medical Discovery

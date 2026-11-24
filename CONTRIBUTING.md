@@ -32,6 +32,27 @@ pytest
 ```
 
 
+## Frontend checks
+
+The frontend workflow runs on pull requests to `main` and pushes to `main`.
+From `web/`, run `npm test` to execute unit tests, build the dashboard, and run
+all six browser tests. For a focused run, use `npm run test:unit` or
+`npm run test:browser`; the browser suite needs an existing frontend build.
+
+Both suites use Node's test runner and `.test.mjs` filenames. Unit tests live in
+`test/web/unit/`, browser tests in `test/web/browser/`, and shared fixtures and
+browser helpers stay outside those directories.
+
+Install Chromium with `npx playwright install chromium` before running browser
+tests. The PSM browser test also needs mzLoupe's Python development dependencies;
+set `MZLOUPE_TEST_PYTHON` if they are installed in a different Python environment.
+Browser tests run sequentially and require no running dashboard server.
+
+Screenshots use the system temporary directory locally. Set
+`MZLOUPE_TEST_ARTIFACTS` to choose another output directory; CI uses
+`test-results/frontend` and uploads screenshots when the test job fails.
+
+
 ## Release versions
 
 `pyproject.toml` is the source of truth for the application version. The

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BundledLicenses } from "../../web/scripts/BundledLicenses.mjs";
+import { BundledLicenses } from "../../../web/scripts/BundledLicenses.mjs";
 
 test("collected dependency notices remain unchanged", () => {
   const report =

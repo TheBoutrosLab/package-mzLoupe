@@ -7,13 +7,9 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc --noEmit && vite build && node scripts/BundledLicenses.mjs",
-        "test": "node --test ../test/web/*.test.mjs",
-        "test:contrast-ui": "node ../test/web/heatmap-contrast.mjs",
-        "test:server-save-ui": "node ../test/web/server-project-save.mjs",
-        "test:proteins-ui": "node ../test/web/protein-accessions.mjs",
-        "test:grouping-ui": "node ../test/web/protein-grouping.mjs",
-        "test:psm-ui": "node ../test/web/psm-table.mjs",
-        "test:requests-ui": "node ../test/web/request-cancellation.mjs"
+        "test": "npm run test:unit && npm run build && npm run test:browser",
+        "test:unit": "node --test ../test/web/unit/*.test.mjs",
+        "test:browser": "node --test --test-concurrency=1 ../test/web/browser/*.test.mjs"
     },
     "dependencies": {
         "@mantine/core": "^8.3.0",
