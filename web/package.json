@@ -1,0 +1,41 @@
+{
+    "name": "mzloupe-web",
+    "version": "0.1.0",
+    "license": "BSD-3-Clause",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build && node scripts/BundledLicenses.mjs",
+        "test": "npm run test:unit && npm run build && npm run test:browser",
+        "test:unit": "node --test ../test/web/unit/*.test.mjs",
+        "test:browser": "node --test --test-concurrency=1 ../test/web/browser/*.test.mjs"
+    },
+    "dependencies": {
+        "@mantine/core": "^8.3.0",
+        "@mantine/hooks": "^8.3.0",
+        "@tabler/icons-react": "^3.52.0",
+        "clsx": "^2.1.1",
+        "mantine-datatable": "^8.3.13",
+        "plotly.js-dist-min": "^3.1.0",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.56.0",
+        "@types/plotly.js": "^3.0.0",
+        "@types/react": "^19.1.0",
+        "@types/react-dom": "^19.1.0",
+        "@vitejs/plugin-react": "^5.0.0",
+        "typescript": "^5.9.0",
+        "vite": "^7.1.0"
+    },
+    "homepage": "https://github.com/TheBoutrosLab/package-mzLoupe",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/TheBoutrosLab/package-mzLoupe.git"
+    },
+    "bugs": {
+        "url": "https://github.com/TheBoutrosLab/package-mzLoupe/issues"
+    }
+}

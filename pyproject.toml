@@ -1,162 +1,80 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "REPLACE_PACKAGE"
-requires-python = ">=3.10"
-authors = [
-    {name = 'REPLACE_NAME', email = 'REPLACE_EMAIL@example.org'}
+name = "mzloupe"
+description = "A local browser dashboard for mass spectrometry evidence."
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+version = "0.1.0"
+readme = "README.md"
+maintainers = [{name = "Boutros Lab"}]
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
+    "pyopenms>=3.6,<4",
+    "numpy>=2,<3",
 ]
-description = 'Libraries for building web applications in Boutros Lab.'
-classifiers = [
-    # Add or remove any appropriate classifiers
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License (GPL)",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering",
-    "Topic :: Software Development :: Libraries",
-    "Intended Audience :: Science/Research",
-    "Intended Audience :: Developers",
-    "Development Status :: 4 - Beta",
-    "Natural Language :: English"
-]
-
-dependencies = []
-
-dynamic = ["version"]
-readme = {file = "README.md", content-type = "text/markdown"}
 
 [project.urls]
-"Homepage" = "https://github.com/TheBoutrosLab/REPLACE_PACKAGE_REPO"
-"Bug Tracker" = "https://github.com/TheBoutrosLab/REPLACE_PACKAGE_REPO/issues"
-"Repository" = "https://github.com/TheBoutrosLab/REPLACE_PACKAGE_REPO.git"
-"Changelog" = "https://github.com/TheBoutrosLab/REPLACE_PACKAGE_REPO/blob/main/CHANGELOG.md"
+"Homepage" = "https://github.com/TheBoutrosLab/package-mzLoupe"
+"Bug Tracker" = "https://github.com/TheBoutrosLab/package-mzLoupe/issues"
+"Repository" = "https://github.com/TheBoutrosLab/package-mzLoupe.git"
+"Changelog" = "https://github.com/TheBoutrosLab/package-mzLoupe/blob/main/CHANGELOG.md"
 
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.version.raw-options]
-git_describe_command = "git describe --dirty --tags --long --match 'v[0-9]*.[0-9]*.[0-9]*'"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "REPLACE_PACKAGE/_version.py"
+[project.scripts]
+mzloupe = "mzloupe.cli:main"
 
 [project.optional-dependencies]
-dev-dependencies = [
-    "pytest ~= 9.1",
-    "pytest-mock ~= 3.12",
-    "mock ~= 5.1",
-    "pytest-cov ~= 7.1",
-    "pyright ~= 1.1",
-    "isort ~= 9.0",
-    "black ~= 26.5",
-    "pylint ~= 4.0"
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "build",
+    "hatchling",
+    "pylint>=4.1,<5",
+    "pyright>=1.1,<2",
 ]
 
-[tool.pyright]
-pythonVersion = "3.10"
+[tool.hatch.build.targets.wheel]
+packages = ["mzloupe"]
+artifacts = ["mzloupe/static/**"]
 
+[tool.hatch.build.targets.sdist]
 include = [
-    "*.py",
-    "REPLACE_PACKAGE/",
-    "test/"
+    "/mzloupe",
+    "/web/src",
+    "/web/scripts",
+    "/web/licenses",
+    "/web/package.json",
+    "/web/package-lock.json",
+    "/web/vite.config.ts",
+    "/web/tsconfig.json",
+    "/web/index.html",
+    "/test",
+    "/.github/scripts",
+    "/README.md",
+    "/docs/*.md",
+    "/docs/assets/logo/mzloupe-logo-on-light.svg",
+    "/docs/assets/logo/mzloupe-logo-on-navy.svg",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/.pylintrc",
+    "/CONTRIBUTING.md",
 ]
-
-exclude = [
-    "**/build",
-    "**/dist",
-    "**/.venv",
-    "**/.pytest_cache",
-    ".github",
-    ".git",
-    "**/typings",
-    "**/node_modules",
-    "**/__pycache__"
-]
-
-extraPaths = []
-
-stubPath = "./typings"
-
-useLibraryCodeForTypes = true
-
-typeCheckingMode = "strict"
-
-reportImportCycles = "information"
-reportCallInDefaultInitializer = "warning"
-reportImplicitOverride = "information"
-reportImplicitStringConcatenation = "warning"
-reportMissingSuperCall = "information"
-reportPropertyTypeMismatch = "error"
-reportShadowedImports = "information"
-reportUninitializedInstanceVariable = "information"
-reportUnnecessaryTypeIgnoreComment = "information"
-reportUnusedCallResult = "information"
-reportMissingTypeStubs = "information"
+artifacts = ["mzloupe/static/**"]
 
 [tool.pytest.ini_options]
-testpaths = [
-    "test"
-]
-
-addopts = [
-    "--import-mode=importlib",
-    # to debug tests without altering these options see
-    # https://pytest-cov.readthedocs.io/en/latest/debuggers.html
-    # For more information regarding doing this with VSCode see
-    # https://github.com/microsoft/vscode-python/issues/21255
-    # and
-    # https://github.com/microsoft/vscode-python/issues/21845
-    "--cov=.",
-    "--junitxml=pytest.xml",
-    "-o=junit_family=xunit2",
-    "--cov-report=xml:cov.xml"
-]
-
-python_files = "test_*.py"
-
-norecursedirs = "__pycache__ build dist .pytest_cache *.egg-info .venv"
-
-[tool.coverage.report]
-include_namespace_packages = true
-
-[tool.coverage.run]
-relative_files = true
-omit = [
-    ".venv/*",
-    ".github-venv/*",
-    "*/test/*",
-    "build/*",
-    "*/build/*",
-    ".pytest_cache/*",
-    ".github/*",
-    ".git/*",
-    "typings/*",
-    "*/typings/*",
-    "node_modules/*",
-    "__pycache__/*",
-    "*/__pycache__/*"
-]
-
-[tool.black]
-exclude = "./(typings|build|dist)"
-
-[tool.isort]
-profile = "black"
-src_paths = ["REPLACE_PACKAGE"]
-skip_glob = ["typings", "build", "dist"]
+testpaths = ["test/python"]
+addopts = "--import-mode=importlib"
 
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-env_list =
-    py3.10
-    py3.12
-
+env_list = py3.11, py3.12
 [testenv]
-deps =
-    pytest
-    pytest-cov
-commands = pytest test --doctest-modules --junitxml=junit/test-results.xml
+deps = pytest
+       httpx
+commands = pytest test/python --junitxml=junit/test-results.xml
 """
