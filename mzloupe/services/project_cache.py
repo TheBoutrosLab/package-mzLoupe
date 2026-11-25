@@ -4,7 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+from tempfile import mkdtemp
 from typing import Any
+from uuid import UUID
 
 from filelock import FileLock, Timeout
 
@@ -14,16 +16,57 @@ from mzloupe.models import ProjectInput
 class ProjectCache:
     """Track source validity separately from project identity and published revisions."""
 
-    def __init__(self, root: Path, version: int) -> None:
-        """Use a project-specific directory and the current derived-data format version."""
-        self.root = root.expanduser().resolve()
+    def __init__(self, cache_root: Path, identifier: str, version: int) -> None:
+        """Derive one project's directory exclusively from the configured root and UUID."""
+        if str(UUID(identifier)) != identifier:
+            raise ValueError("Invalid project ID")
+        self.cache_root = cache_root.expanduser().resolve()
+        self.root = self.cache_root / "projects" / identifier
         self.version = version
         self.lease: FileLock | None = None
 
+    def validate_path(self, path: Path) -> Path:
+        """Reject traversal and symlinks before accessing this project's cache artifacts.
+
+        Keep the original path instead of following a link into another project or
+        outside the configured root. Check again for each operation, since directory
+        entries may change after this object is constructed.
+        """
+        if not path.is_relative_to(self.root) or path.resolve() != path:
+            raise ValueError("Cache path must stay inside its project directory without symlinks")
+        return path
+
+    def workspace(self, path: Path) -> Path:
+        """Accept only a direct revision directory owned by this project."""
+        if path.parent != self.root or not path.name.startswith("revision-"):
+            raise ValueError("Invalid project cache revision directory")
+        return self.validate_path(path)
+
+    def stage(self) -> Path:
+        """Create a temporary revision only within the checked project directory."""
+        self.validate_path(self.root).mkdir(parents=True, exist_ok=True)
+        return Path(mkdtemp(prefix="revision-", dir=self.validate_path(self.root)))
+
+    def discard(self, workspace: Path) -> None:
+        """Delete one checked revision after failed or superseded preparation."""
+        shutil.rmtree(self.workspace(workspace))
+
+    def clear(self) -> None:
+        """Delete only this project's checked directory; a missing cache is harmless."""
+        directory = self.validate_path(self.root)
+        try:
+            shutil.rmtree(directory)
+        except FileNotFoundError:
+            pass
+
     def acquire(self) -> None:
         """Keep a second server from writing or collecting this project's active artifacts."""
+        self.validate_path(self.root)
         self.root.parent.mkdir(parents=True, exist_ok=True)
-        lease = FileLock(self.root.parent / ("." + self.root.name + ".lock"), thread_local=False)
+        lock_path = self.root.parent / ("." + self.root.name + ".lock")
+        if lock_path.resolve() != lock_path:
+            raise ValueError("Project cache lock must not follow symlinks")
+        lease = FileLock(lock_path, thread_local=False)
         try:
             lease.acquire(timeout=0)
         except Timeout as error:
@@ -45,7 +88,12 @@ class ProjectCache:
 
     def describe(self, project: ProjectInput) -> dict[str, Any]:
         """Record raw inputs and resolution scopes needed to invalidate dependent results."""
-        acquisitions = {item.id: self.signature(item.mzml) for item in project.acquisitions}
+        return {"version": self.version, **self.inputs(project)}
+
+    @staticmethod
+    def inputs(project: ProjectInput) -> dict[str, Any]:
+        """Describe scientific inputs without requiring or creating a cache directory."""
+        acquisitions = {item.id: ProjectCache.signature(item.mzml) for item in project.acquisitions}
         identifications = {}
         for (sample, layer, path), sources in project.identification_sources().items():
             key = json.dumps([sample, layer, path])
@@ -54,13 +102,12 @@ class ProjectCache:
                 for item in project.acquisitions
                 if item.id in sources
             ]
-            identifications[key] = [self.signature(path), scope]
+            identifications[key] = [ProjectCache.signature(path), scope]
         return {
-            "version": self.version,
             "configuration": project.model_dump(),
             "acquisitions": acquisitions,
             "identifications": identifications,
-            "groupings": [self.signature(item.path) for item in project.protein_groupings],
+            "groupings": [ProjectCache.signature(item.path) for item in project.protein_groupings],
         }
 
     @staticmethod
@@ -70,23 +117,29 @@ class ProjectCache:
 
     def current(self) -> Path | None:
         """Return the published metadata snapshot, if the project has a usable cache."""
-        marker = self.root / "current.json"
         try:
+            marker = self.validate_path(self.root / "current.json")
             record = json.loads(marker.read_text())
             name = record["workspace"]
-            if not name.startswith("revision-") or Path(name).name != name:
+            if (
+                not isinstance(name, str)
+                or not name.startswith("revision-")
+                or Path(name).name != name
+            ):
                 return None
-            workspace = self.root / name
+            workspace = self.workspace(self.root / name)
             if not all(
-                Path(filename).name == filename and (workspace / filename).is_file()
+                Path(filename).name == filename
+                and self.validate_path(workspace / filename).is_file()
                 for filename in record["outputs"]
             ):
                 return None
-            if not (workspace / "catalog.sqlite").is_file():
+            if not self.validate_path(workspace / "catalog.sqlite").is_file():
                 return None
+            self.validate_path(workspace / "prepared.json")
             description = self.description(workspace)
             if not all(
-                (workspace / (identifier + ".npz")).is_file()
+                self.validate_path(workspace / (identifier + ".npz")).is_file()
                 for identifier in description.get("acquisitions", {})
             ):
                 return None
@@ -100,7 +153,8 @@ class ProjectCache:
         if workspace is None:
             return {}
         try:
-            return json.loads((workspace / "prepared.json").read_text())
+            record = json.loads((workspace / "prepared.json").read_text())
+            return record if isinstance(record, dict) else {}
         except (OSError, ValueError):
             return {}
 
@@ -119,21 +173,23 @@ class ProjectCache:
 
     def publish(self, workspace: Path, description: dict[str, Any]) -> None:
         """Publish complete artifacts before atomically switching the project pointer."""
-        prepared = workspace / "prepared.pending"
+        self.workspace(workspace)
+        prepared = self.validate_path(workspace / "prepared.pending")
         prepared.write_text(json.dumps(description))
-        prepared.replace(workspace / "prepared.json")
-        pending = self.root / "current.pending"
+        prepared.replace(self.validate_path(workspace / "prepared.json"))
+        pending = self.validate_path(self.root / "current.pending")
         outputs = ["catalog.sqlite", "prepared.json"]
-        outputs.extend(path.name for path in workspace.glob("*.npz"))
-        outputs.extend(path.name for path in workspace.glob("*.mzML"))
+        outputs.extend(self.validate_path(path).name for path in workspace.glob("*.npz"))
+        outputs.extend(self.validate_path(path).name for path in workspace.glob("*.mzML"))
         pending.write_text(json.dumps({"workspace": workspace.name, "outputs": outputs}))
-        pending.replace(self.root / "current.json")
+        pending.replace(self.validate_path(self.root / "current.json"))
 
     def prune(self) -> None:
         """Remove superseded snapshots only after this server has finished its readers."""
+        self.validate_path(self.root)
         current = self.current()
         if not self.root.is_dir():
             return
         for workspace in self.root.glob("revision-*"):
             if workspace != current:
-                shutil.rmtree(workspace)
+                self.discard(workspace)

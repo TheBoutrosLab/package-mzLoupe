@@ -23,14 +23,15 @@ identification layers, or saving edits keeps the same identity. **Duplicate** cr
 an independent project with a new ID. The row menu also provides **Edit**, **Export
 JSON**, **Archive**, **Clear cache**, and **Delete project**. Archived projects remain
 available through **Include archived**. Clearing a cache preserves the project;
-deleting a project removes its saved definition and prepared cache. Original input
-files are kept. Choose **Close project** from the active project's menu before
-clearing its cache or deleting it; restarting mzLoupe is not necessary.
+deleting a project removes its saved definition and its cache under the current root.
+Original input files and caches under other roots are kept. Choose **Close project**
+from the active project's menu before clearing its cache or deleting it; restarting mzLoupe is not necessary.
 
 The library stores metadata in `~/.local/share/mzloupe/projects.sqlite`, outside the
 cache directory. Use `--registry /path/to/projects.sqlite` to select another registry.
-Library rows show the last known preparation status; opening a project rechecks its
-input files. **Edit** loads only the saved configuration, without preparing mzML.
+Library rows check cache availability under the current cache root; opening a project
+also rechecks its input files. **Edit** loads only the saved configuration, without
+preparing mzML.
 
 ## Project setup in the dashboard
 
@@ -217,11 +218,14 @@ and runs in a background worker while the UI reports progress. Signal operations
 are serialized to bound simultaneous readers.
 
 Each project has a stable directory under `~/.cache/mzloupe/projects/<project-id>/`.
-Use `--cache /path/to/cache` to select the root for newly prepared projects; registered
-projects remember their cache locations. File paths, sizes, modification times, and
-processing format determine which inputs need preparation, without full content
-checksums. Adding a fraction prepares only that acquisition and re-resolves the
-affected sample's identifications. Changing an idXML reimports only the affected
+Use `--cache /path/to/cache` to select the root for every project in that server.
+Cache paths are derived from this root and the project UUID, rather than stored in
+the registry. Changing the root uses an existing valid cache there or prepares a new
+one; caches under the previous root are neither moved nor deleted. Readiness is
+checked from the selected root's cache manifests, so a shared registry cannot make
+an absent cache appear ready. File paths, sizes, modification times, and processing
+format determine which inputs need preparation, without full content checksums.
+Adding a fraction prepares only that acquisition and re-resolves the affected sample's identifications. Changing an idXML reimports only the affected
 layer; renaming a project or changing grouping does not reread mzML.
 
 Updates stage complete metadata snapshots inside the same project directory before
@@ -230,7 +234,8 @@ Superseded snapshots are collected after the server finishes its readers when th
 project is closed or the server shuts down.
 A project cache has one server owner at a time; another server can browse its saved
 configuration but cannot prepare the same cache concurrently. Clearing caches leaves
-the durable registry and original input files intact.
+the durable registry and original input files intact. Cache writes and cleanup reject
+paths or symlinks that redirect outside the expected project directory.
 
 Identification files are loaded with pyOpenMS `IdXMLFile` into native protein and peptide identification objects. One complete idXML is held in memory during its import. The reader uses OpenMS run identifiers and source metadata to associate PSMs with acquisitions, then the importer writes the selected fields to SQLite.
 

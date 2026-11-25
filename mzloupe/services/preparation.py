@@ -31,7 +31,7 @@ class ProjectPreparer:
         description: dict | None = None,
     ) -> ProjectCatalog:
         """Reuse unchanged acquisitions and reimport only affected sample/layer inputs."""
-        state = description or ProjectCache(self.workspace, 1).describe(project)
+        state = description or ProjectCache.inputs(project)
         old = ProjectCache.description(previous)
         catalog = self.copy_catalog(previous)
         self.update_acquisitions(

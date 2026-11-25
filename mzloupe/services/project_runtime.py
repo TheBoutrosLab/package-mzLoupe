@@ -2,9 +2,7 @@
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
-import shutil
 import sqlite3
-from tempfile import mkdtemp
 from threading import Lock
 from typing import Any
 
@@ -50,24 +48,15 @@ class ProjectRuntime:
         if identifier in self.caches:
             return self.caches[identifier]
         record = self.registry.get(identifier)
-        directory = self.cache_directory(record)
-        if not record["cache_directory"]:
-            self.registry.set_cache(identifier, directory)
-        cache = ProjectCache(directory, self.cache_version)
+        cache = ProjectCache(self.cache, record["id"], self.cache_version)
         cache.acquire()
         self.caches[identifier] = cache
         return cache
 
-    def cache_directory(self, record: dict[str, Any]) -> Path:
-        """Resolve registered storage without creating a cache or claiming its write lease."""
-        if record["cache_directory"]:
-            return Path(record["cache_directory"])
-        return self.cache / "projects" / record["id"]
-
     def preparation_plan(self, project: ProjectInput) -> dict[str, int]:
         """Preview reuse without locking a project merely because its editor is open."""
-        directory = self.cache_directory(self.registry.get(project.id))
-        return ProjectCache(directory, self.cache_version).plan(project)
+        self.registry.get(project.id)
+        return ProjectCache(self.cache, project.id, self.cache_version).plan(project)
 
     def open(self, path: str | Path) -> None:
         """Register a manifest once and prepare its saved project identity."""
@@ -146,6 +135,7 @@ class ProjectRuntime:
     def prepare(self, project: ProjectInput) -> None:
         """Reuse unaffected inputs and publish a complete snapshot in this project's cache."""
         workspace = None
+        cache: ProjectCache | None = None
         published = False
         try:
             try:
@@ -169,13 +159,12 @@ class ProjectRuntime:
                 catalog.groupings = ProteinGroupings(project, catalog)
                 if old != description:
                     cache.publish(previous, description)
-                self.registry.prepared(project, self.cache_version)
+                self.registry.report_error(project.id, "")
                 self.publish_ready(project, catalog, previous, stamp)
                 return
             if old.get("version") != self.cache_version:
                 previous = None
-            cache.root.mkdir(parents=True, exist_ok=True)
-            workspace = Path(mkdtemp(prefix="revision-", dir=cache.root))
+            workspace = cache.stage()
             catalog = ProjectPreparer(workspace).prepare(
                 project, self.progress, previous, description
             )
@@ -184,11 +173,11 @@ class ProjectRuntime:
                 raise ValueError("A source changed during preparation. Open the project again.")
             cache.publish(workspace, description)
             published = True
-            self.registry.prepared(project, self.cache_version)
+            self.registry.report_error(project.id, "")
             self.publish_ready(project, catalog, workspace, stamp)
         except (OSError, ValueError, RuntimeError, TypeError, sqlite3.Error) as error:
-            if workspace is not None and not published:
-                shutil.rmtree(workspace)
+            if workspace is not None and not published and cache is not None:
+                cache.discard(workspace)
             self.registry.report_error(project.id, str(error))
             with self.lock:
                 self.status = {
@@ -201,12 +190,15 @@ class ProjectRuntime:
     def library_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Describe saved state cheaply; validate scientific files only when opening or editing."""
         configuration = record["configuration"]
-        directory = str(self.cache_directory(record))
-        has_cache = record["prepared_configuration"] is not None
+        cache = ProjectCache(self.cache, record["id"], self.cache_version)
+        directory = str(cache.root)
+        prepared = cache.description(cache.current())
+        has_cache = bool(prepared)
         state = (
             "ready"
-            if record["prepared_configuration"] == configuration
-            and record["prepared_version"] == self.cache_version
+            if has_cache
+            and prepared.get("configuration") == configuration
+            and prepared.get("version") == self.cache_version
             else "needs preparation"
         )
         if not configuration["acquisitions"]:
@@ -259,12 +251,11 @@ class ProjectRuntime:
                 raise ValueError("Close the project before clearing its cache")
             cache = self.cache_for(identifier)
             try:
-                shutil.rmtree(cache.root)
-            except FileNotFoundError:
-                pass
-            cache.release()
-            self.caches.pop(identifier, None)
-            self.registry.cache_cleared(identifier)
+                cache.clear()
+            finally:
+                cache.release()
+                self.caches.pop(identifier, None)
+            self.registry.report_error(identifier, "")
 
     def snapshot(self, token: str) -> tuple[ProjectInput, ProjectCatalog, Path]:
         """Return the active session only if the caller's project token still matches."""
@@ -297,8 +288,9 @@ class ProjectRuntime:
         with self.signal_lock, self.search_lock:
             self.signal = None
             self.search = None
-        for cache in self.caches.values():
-            try:
+        try:
+            for cache in self.caches.values():
                 cache.prune()
-            finally:
+        finally:
+            for cache in self.caches.values():
                 cache.release()

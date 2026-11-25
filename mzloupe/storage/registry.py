@@ -63,12 +63,15 @@ class ProjectRegistry:
     def decode(row: sqlite3.Row) -> dict[str, Any]:
         """Decode configuration snapshots without opening any scientific or cache files."""
         return {
-            **dict(row),
-            "archived": bool(row["archived"]),
+            "id": row["id"],
             "configuration": json.loads(row["configuration"]),
-            "prepared_configuration": (
-                json.loads(row["prepared_configuration"]) if row["prepared_configuration"] else None
-            ),
+            "revision": row["revision"],
+            "created_at": row["created_at"],
+            "modified_at": row["modified_at"],
+            "opened_at": row["opened_at"],
+            "archived": bool(row["archived"]),
+            "source_path": row["source_path"],
+            "error": row["error"],
         }
 
     def save(self, project: ProjectInput, source_path: Path | None = None) -> dict[str, Any]:
@@ -145,33 +148,7 @@ class ProjectRegistry:
         with self.connect() as connection:
             connection.execute("DELETE FROM projects WHERE id=?", (identifier,))
 
-    def set_cache(self, identifier: str, directory: Path) -> None:
-        """Remember this project's cache location independently of its portable manifest."""
-        self.get(identifier)
-        with self.connect() as connection:
-            connection.execute(
-                "UPDATE projects SET cache_directory=? WHERE id=?", (str(directory), identifier)
-            )
-
     def report_error(self, identifier: str, message: str) -> None:
         """Remember a preparation problem so it remains visible in the project library."""
         with self.connect() as connection:
             connection.execute("UPDATE projects SET error=? WHERE id=?", (message, identifier))
-
-    def prepared(self, project: ProjectInput, version: int) -> None:
-        """Record the last successfully published configuration for cheap library summaries."""
-        with self.connect() as connection:
-            connection.execute(
-                "UPDATE projects SET prepared_configuration=?, prepared_version=?, error='' "
-                "WHERE id=?",
-                (project.model_dump_json(), version, project.id),
-            )
-
-    def cache_cleared(self, identifier: str) -> None:
-        """Forget prepared state while retaining all saved configuration and history metadata."""
-        with self.connect() as connection:
-            connection.execute(
-                "UPDATE projects SET prepared_configuration=NULL, prepared_version=NULL, error='' "
-                "WHERE id=?",
-                (identifier,),
-            )

@@ -227,20 +227,20 @@ def test_manifest_without_id_reopens_the_same_registered_project(tmp_path: Path)
     assert identities[0] == identities[1]
 
 
-def test_listing_projects_does_not_inspect_inputs_or_caches(
+def test_listing_projects_does_not_read_scientific_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Historical project lists use only registry rows, including unavailable old sources."""
+    """Library availability reads local manifests without inspecting scientific inputs."""
     project = ProjectInput.load(DemoProject().write(tmp_path / "data"))
     with TestClient(create_app(tmp_path / "cache")) as client:
         open_project(client, project)
 
         def reject_inspection(*_args, **_kwargs) -> None:
-            """The library must not touch scientific files or inspect cache snapshots."""
-            pytest.fail("Listing projects inspected source/cache files")
+            """The library must not inspect scientific files or decode peak arrays."""
+            pytest.fail("Listing projects inspected scientific files")
 
         with monkeypatch.context() as listing:
-            listing.setattr(ProjectCache, "current", reject_inspection)
+            listing.setattr(ProjectCache, "signature", reject_inspection)
             listing.setattr(ProjectInput, "file_issues", reject_inspection)
             assert client.get("/api/library").json()[0]["id"] == project.id
 
@@ -365,3 +365,76 @@ def test_closing_workspace_allows_cache_cleanup_without_stopping_server(tmp_path
         client.delete(f"/api/library/{project.id}/cache").raise_for_status()
         assert client.get(f"/api/library/{project.id}").json()["has_cache"] is False
         assert open_project(client, project)["project_id"] == project.id
+
+
+def test_shared_registry_uses_current_cache_root_and_local_readiness(tmp_path: Path) -> None:
+    """A root change keeps the project identity without reusing or clearing the other root."""
+    project = ProjectInput.load(DemoProject().write(tmp_path / "data"))
+    registry = tmp_path / "state/projects.sqlite"
+    first_root = tmp_path / "first-cache"
+    second_root = tmp_path / "second-cache"
+    with TestClient(create_app(first_root, registry=registry)) as first:
+        original = open_project(first, project)
+        first_directory = first_root / "projects" / project.id
+        with TestClient(create_app(second_root, registry=registry)) as second:
+            record = second.get(f"/api/library/{project.id}").json()
+            assert record["cache_directory"] == str(second_root / "projects" / project.id)
+            assert record["status"] == "needs preparation" and not record["has_cache"]
+            second.delete(f"/api/library/{project.id}/cache").raise_for_status()
+            assert first_directory.is_dir()
+            assert first.get(f"/api/library/{project.id}").json()["status"] == "ready"
+            prepared = open_project(second, project)
+            assert prepared["project_id"] == original["project_id"] == project.id
+            assert (
+                second.app.state.runtime.active[2].parent == second_root / "projects" / project.id
+            )
+            second.post(f"/api/library/{project.id}/close").raise_for_status()
+            second.delete(f"/api/library/{project.id}/cache").raise_for_status()
+            assert not second.get(f"/api/library/{project.id}").json()["has_cache"]
+            assert first.get(f"/api/library/{project.id}").json()["status"] == "ready"
+            assert (
+                first.get(f"/api/projects/{original['token']}/sources/fraction_01/map").status_code
+                == 200
+            )
+        with first.app.state.runtime.registry.connect() as connection:
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(projects)")}
+        assert "cache_directory" not in columns
+        assert "prepared_configuration" not in columns and "prepared_version" not in columns
+
+
+def test_deleting_project_only_clears_the_current_cache_root(tmp_path: Path) -> None:
+    """Deleting from a new root leaves old caches and original scientific inputs untouched."""
+    project = ProjectInput.load(DemoProject().write(tmp_path / "data"))
+    registry = tmp_path / "state/projects.sqlite"
+    first_root = tmp_path / "first-cache"
+    with TestClient(create_app(first_root, registry=registry)) as client:
+        open_project(client, project)
+    marker = first_root / "projects" / project.id / "current.json"
+    original = marker.read_bytes()
+    with TestClient(create_app(tmp_path / "second-cache", registry=registry)) as client:
+        client.delete(f"/api/library/{project.id}").raise_for_status()
+        assert client.get("/api/library").json() == []
+    assert marker.read_bytes() == original
+    assert all(Path(source.mzml).is_file() for source in project.acquisitions)
+
+
+@pytest.mark.parametrize("action", ["clear", "delete"])
+def test_library_deletion_rejects_a_redirected_project_directory(
+    tmp_path: Path, action: str
+) -> None:
+    """Both API deletion operations keep a project and external files when its path is unsafe."""
+    with TestClient(create_app(tmp_path / "cache")) as client:
+        project = client.post("/api/library", json={"name": "Draft"}).json()
+        identifier = project["id"]
+        directory = Path(project["cache_directory"])
+        protected = tmp_path / "protected"
+        protected.mkdir()
+        sentinel = protected / "keep.txt"
+        sentinel.write_text("Original data")
+        directory.parent.mkdir(parents=True)
+        directory.symlink_to(protected, target_is_directory=True)
+        suffix = "/cache" if action == "clear" else ""
+        response = client.delete(f"/api/library/{identifier}{suffix}")
+        assert response.status_code == 400 and "without symlinks" in response.json()["detail"]
+        assert sentinel.read_text() == "Original data"
+        assert client.get(f"/api/library/{identifier}").status_code == 200

@@ -14,6 +14,8 @@ Initial release.
 - Incremental project preparation that reuses unchanged acquisition data, refreshes
   affected identification scopes, and preserves the previous usable revision when
   updates fail. Durable project definitions remain separate from disposable caches.
+- Configurable cache roots with project UUID directories, local cache availability,
+  and boundary checks for cache writes and cleanup.
 - Interactive project setup with sample/fraction assignments for mzML files and
   sample-level identification layers for idXML files. Includes filesystem
   browsing, batch file selection, and input validation.

@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIRECTORY",
         help=(
             "Directory for scan indexes, acquisition maps, and prepared mzML "
-            "working copies. Keeps each project cache stable and reuses unchanged inputs "
+            "working copies. Uses this root for every project and reuses unchanged inputs "
             "(default: ~/.cache/mzloupe)."
         ),
     )

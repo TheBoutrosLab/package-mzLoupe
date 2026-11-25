@@ -8,10 +8,7 @@ CREATE TABLE IF NOT EXISTS projects (
     opened_at TEXT,
     archived INTEGER NOT NULL DEFAULT 0,
     source_path TEXT,
-    prepared_configuration TEXT,
-    prepared_version INTEGER,
-    error TEXT NOT NULL DEFAULT '',
-    cache_directory TEXT
+    error TEXT NOT NULL DEFAULT ''
 );
 
 -- Remember imported manifest locations independently of their portable UUIDs.

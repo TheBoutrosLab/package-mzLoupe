@@ -60,7 +60,7 @@ export function Application() {
     };
   }, [loadStatus, cancelStatus]);
 
-  // Library rows are cheap registry metadata; opening the page never parses mzML.
+  // Library rows read saved metadata and small cache manifests; they never parse mzML.
   useEffect(() => {
     loadLibrary<LibraryProject[]>({
       url: "/api/library?include_archived=" + state.includeArchived,
