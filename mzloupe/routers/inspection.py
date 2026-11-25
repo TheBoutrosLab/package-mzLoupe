@@ -4,10 +4,11 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, Query
 
-from mzloupe.models import XicRequest, MapTargetRequest
+from mzloupe.models import FragmentXicRequest, MapTargetRequest, XicRequest
 from mzloupe.psm_models import PsmFilters, PsmQuery
+from mzloupe.services.fragment_annotation import FragmentAnnotator
 from mzloupe.services.project_runtime import ProjectRuntime
-from mzloupe.services.signal import SignalService, FragmentAnnotator
+from mzloupe.services.signal import SignalService
 
 
 class InspectionRoutes:
@@ -54,6 +55,11 @@ class InspectionRoutes:
             "/projects/{token}/psms/{psm_id}/annotations",
             self.annotations,
             methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/projects/{token}/fragment-xic",
+            self.fragment_xic,
+            methods=["POST"],
         )
         app.include_router(self.router)
 
@@ -116,6 +122,11 @@ class InspectionRoutes:
         """Extract the requested MS1 trace from disk-backed spectra."""
         with self.runtime.signal_lock:
             return self.runtime.signal_service(token).xic(request)
+
+    def fragment_xic(self, token: str, request: FragmentXicRequest) -> dict[str, Any]:
+        """Extract matched fragment traces from a conventional DIA acquisition."""
+        with self.runtime.signal_lock:
+            return self.runtime.signal_service(token).fragment_xic(request)
 
     def annotations(
         self,

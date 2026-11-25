@@ -3,7 +3,8 @@ CREATE TABLE acquisitions (
     id TEXT PRIMARY KEY,
     sample TEXT,
     fraction TEXT,
-    path TEXT
+    path TEXT,
+    mode TEXT NOT NULL CHECK (mode IN ('DIA', 'DDA', 'Unknown'))
 );
 
 -- Spectrum metadata; peak arrays remain in mzML.
@@ -15,6 +16,8 @@ CREATE TABLE scans (
     level INTEGER,
     mz REAL,       -- MS2 isolation center, when available.
     charge INTEGER,
+    isolation_lower_mz REAL, -- Absolute precursor isolation bounds; NULL when unknown.
+    isolation_upper_mz REAL,
     PRIMARY KEY (source, ordinal),
     UNIQUE (source, native)
 );

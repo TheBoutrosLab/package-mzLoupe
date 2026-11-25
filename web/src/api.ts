@@ -1,5 +1,9 @@
+/** Explicit acquisition classification; unknown runs do not enable DIA extraction. */
+export type AcquisitionMode = "DIA" | "DDA" | "Unknown";
+
 /** Summary counts and identification layers for one mzML acquisition. */
 export interface Acquisition {
+  mode: AcquisitionMode;
   id: string;
   sample: string;
   fraction: string;
@@ -79,6 +83,26 @@ export interface Trace {
   psms: Psm[];
 }
 
+/** Raw intensities for all peptide-matched fragments from one DIA isolation window. */
+export interface FragmentTrace {
+  psm_id: number;
+  source: string;
+  precursor_mz: number;
+  ppm: number;
+  start: number;
+  stop: number;
+  scan_count: number;
+  isolation_lower_mz: number;
+  isolation_upper_mz: number;
+  rt: number[];
+  fragments: {
+    label: string;
+    mz: number;
+    charge: number;
+    intensity: number[];
+  }[];
+}
+
 /** The strongest measured MS1 peak resolved from a selected map cell. */
 export interface MapTarget {
   source: string;
@@ -99,6 +123,8 @@ export interface MapCell {
 
 /** A fragment-ion assignment to an index in the measured spectrum's arrays. */
 export interface Annotation {
+  mz: number; // Theoretical fragment m/z, used for chromatogram extraction.
+  charge: number;
   index: number;
   label: string;
   ppm: number; // Signed mass error in parts per million.
@@ -185,6 +211,7 @@ export interface ProteinGroupingSummary extends ProteinGroupingInput {
 
 /** File associations needed to register one acquisition in a project. */
 export interface AcquisitionInput {
+  mode?: AcquisitionMode;
   id: string;
   sample: string;
   fraction: string;

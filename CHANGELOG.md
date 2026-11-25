@@ -37,6 +37,15 @@ Initial release.
 - Precursor chromatograms from peptide identifications, MS1 map selections, or
   manual m/z targets. Includes configurable ppm tolerance, calculated peptide
   masses when needed, linked retention-time zoom, and empty-signal reporting.
+- Optional DIA fragment chromatograms overlaid with precursor XICs, using all
+  matched singly charged b/y ions, original isolation-window metadata, batched
+  disk reads, per-ion visibility, and relative or raw intensity display.
+- Sortable fragment-ion tables with theoretical m/z, charge, signed mass error,
+  spectrum intensity, ambiguous-assignment indicators, DIA trace selection presets,
+  stable ion colors, and linked spectrum/chromatogram highlighting.
+- Explicit per-acquisition DIA/DDA/Unknown modes and catalog isolation bounds,
+  with validation of conventional DIA windows using a small absolute tolerance
+  for isolation metadata, plus bounded trace caching.
 - Optional chromatogram PSM marks spanning all identification layers and ranks
   within the extraction window, with grouped scan evidence, assignment details
   on hover, and spectrum selection on click.

@@ -419,3 +419,37 @@ footer span {
 .project-details summary { cursor: pointer; font-weight: 600; }
 .project-details dl { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
 .project-details dd { margin: 0; overflow-wrap: anywhere; }
+
+/* The fragment table remains compact while its full assignment list scrolls. */
+.fragment-table {
+  margin: 0 18px 20px;
+}
+.fragment-table-heading h3 {
+  padding: 0;
+  margin: 12px 0;
+}
+.fragment-table .caption {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+.fragment-table table {
+  margin-bottom: 0;
+}
+.fragment-color {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.fragment-label {
+  color: #000;
+  font-size: inherit;
+}
+.fragment-label:hover,
+.fragment-label[aria-pressed="true"] {
+  text-decoration: underline;
+}
+.fragment-ambiguity {
+  color: #9b5100;
+  cursor: help;
+}
