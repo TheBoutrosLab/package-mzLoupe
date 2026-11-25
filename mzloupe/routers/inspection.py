@@ -4,10 +4,11 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, Query
 
-from mzloupe.models import FragmentXicRequest, XicRequest, MapTargetRequest
+from mzloupe.models import FragmentXicRequest, MapTargetRequest, XicRequest
 from mzloupe.psm_models import PsmFilters, PsmQuery
+from mzloupe.services.fragment_annotation import FragmentAnnotator
 from mzloupe.services.project_runtime import ProjectRuntime
-from mzloupe.services.signal import SignalService, FragmentAnnotator
+from mzloupe.services.signal import SignalService
 
 
 class InspectionRoutes:

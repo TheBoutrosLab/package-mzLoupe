@@ -11,9 +11,9 @@ import pytest
 from mzloupe.app import create_app
 from mzloupe.models import FragmentXicRequest, ProjectInput
 from mzloupe.readers.mzml import MzMLReader
+from mzloupe.services.fragment_annotation import FragmentAnnotator
 from mzloupe.services.fragment_xic import FragmentXicExtractor
 from mzloupe.services.preparation import ProjectPreparer
-from mzloupe.services.signal import FragmentAnnotator
 from test.python.dia_fixtures import write_dia_project
 from test.python.psm_fixtures import wait_for_project
 
