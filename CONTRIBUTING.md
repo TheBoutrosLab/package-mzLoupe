@@ -26,7 +26,7 @@ Check every backend module with:
 ```sh
 pylint --source-roots=. mzloupe/*.py \
   mzloupe/readers/*.py mzloupe/services/*.py \
-  mzloupe/storage/*.py
+  mzloupe/storage/*.py mzloupe/routers/*.py
 pyright --pythonpath .venv/bin/python mzloupe
 pytest
 ```
@@ -36,7 +36,7 @@ pytest
 
 The frontend workflow runs on pull requests to `main` and pushes to `main`.
 From `web/`, run `npm test` to execute unit tests, build the dashboard, and run
-all six browser tests. For a focused run, use `npm run test:unit` or
+all browser tests. For a focused run, use `npm run test:unit` or
 `npm run test:browser`; the browser suite needs an existing frontend build.
 
 Both suites use Node's test runner and `.test.mjs` filenames. Unit tests live in
@@ -52,6 +52,13 @@ Screenshots use the system temporary directory locally. Set
 `MZLOUPE_TEST_ARTIFACTS` to choose another output directory; CI uses
 `test-results/frontend` and uploads screenshots when the test job fails.
 
+
+## Project lifecycle checks
+
+Use temporary registries and caches in tests. `test/python/conftest.py` isolates the
+user's project library, and the browser workers supply explicit temporary registry
+paths. The project-library browser test uses the real API over pipes, without
+starting a dashboard server.
 
 ## Release versions
 
@@ -77,3 +84,11 @@ python .github/scripts/sync_versions.py
 The script preserves JSON formatting and dependency versions. It needs only
 Python 3.11 or newer; Node and an installed mzLoupe package are not required.
 The database/cache format version is independent of the release version.
+
+## API organization
+
+HTTP endpoints live in `mzloupe/routers/`. Each route group is a class with public
+handler methods and an `APIRouter`. Its constructor receives the runtime or assets
+it needs; `register(app)` declares its endpoints and includes the router.
+`mzloupe/app.py` composes these groups and manages application lifetime. Keep
+preparation, signal processing, and storage logic in their existing services.

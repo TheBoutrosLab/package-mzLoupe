@@ -11,11 +11,16 @@ import type {
   Psm,
   Spectrum
 } from "./api";
+import { ProjectLocation } from "./ProjectLocation";
 import { ExplorerModel } from "./ExplorerState";
 import { useApiRequest } from "./useApiRequest";
 
 /** Coordinate independent request lanes around the explorer's pure state transitions. */
-export function useExplorer(status: ProjectStatus, fragmentPpm: number | string) {
+export function useExplorer(
+  status: ProjectStatus,
+  fragmentPpm: number | string,
+  visible: boolean
+) {
   const [state, dispatch] = useReducer(
     ExplorerModel.reduce,
     undefined,
@@ -106,22 +111,26 @@ export function useExplorer(status: ProjectStatus, fragmentPpm: number | string)
   // Persist accepted state so an obsolete response cannot change the address bar.
   useEffect(() => {
     const selection = state.selection;
-    if (!ready || !selection) return;
+    if (!ready || !selection || !visible) return;
+    const identifier = status.active_project_id || status.project_id;
     if (selection.kind === "mapTarget") {
-      history.replaceState(
-        null,
-        "",
-        "?source=" + encodeURIComponent(selection.cell.source)
-      );
+      ProjectLocation.selection(identifier, { source: selection.cell.source });
     } else if (state.spectrum) {
-      const parameters = new URLSearchParams({
+      const parameters: Record<string, string> = {
         source: state.spectrum.source,
         scan: String(state.spectrum.ordinal)
-      });
-      if (selection.psmId) parameters.set("psm", String(selection.psmId));
-      history.replaceState(null, "", "?" + parameters);
+      };
+      if (selection.psmId) parameters.psm = String(selection.psmId);
+      ProjectLocation.selection(identifier, parameters);
     }
-  }, [ready, state.selection, state.spectrum]);
+  }, [
+    ready,
+    state.selection,
+    state.spectrum,
+    visible,
+    status.active_project_id,
+    status.project_id
+  ]);
 
   // Annotation changes leave measured peaks and the time viewport untouched.
   useEffect(() => {

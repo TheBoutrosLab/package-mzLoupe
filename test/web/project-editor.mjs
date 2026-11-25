@@ -38,7 +38,7 @@ await expect(
   page.getByText("This sample/fraction pair occurs twice").first()
 ).toBeVisible();
 await expect(
-  page.getByRole("button", { name: "Apply changes", exact: true })
+  page.getByRole("button", { name: "Save and explore", exact: true })
 ).toBeDisabled();
 await fractions.nth(1).fill("F02");
 
@@ -50,7 +50,7 @@ await expect(
 ).toBeVisible();
 await paths.first().fill(original);
 await expect(
-  page.getByRole("button", { name: "Apply changes", exact: true })
+  page.getByRole("button", { name: "Save and explore", exact: true })
 ).toBeEnabled();
 
 await page.getByRole("button", { name: "Add mzML files", exact: true }).click();
@@ -91,7 +91,7 @@ await page
   .click();
 await expect(page.getByRole("textbox", { name: /^idXML path for / })).toHaveCount(2);
 
-await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+await page.getByRole("button", { name: "Export JSON", exact: true }).click();
 await page.getByLabel("Directory", { exact: true }).fill(demoDirectory);
 await page
   .getByLabel("File name", { exact: true })
@@ -112,7 +112,7 @@ assert.equal(exported.acquisitions.length, 2);
 assert.equal(exported.samples[0].identifications.length, 2);
 
 await page.screenshot({ path: join(artifacts, "setup.png"), fullPage: true });
-await page.getByRole("button", { name: "Apply changes", exact: true }).click();
+await page.getByRole("button", { name: "Save and explore", exact: true }).click();
 await page.getByRole("heading", { name: "MS1 acquisition map" }).waitFor();
 await page.getByRole("button", { name: "Project setup", exact: true }).click();
 await expect(page.getByLabel("Project name", { exact: true })).toHaveValue(
@@ -126,7 +126,7 @@ await page.getByRole("button", { name: "Import into tables", exact: true }).clic
 await expect(page.getByLabel("Project name", { exact: true })).toHaveValue(
   "Synthetic DDA demonstration"
 );
-await page.getByRole("button", { name: "Apply changes", exact: true }).click();
+await page.getByRole("button", { name: "Save and explore", exact: true }).click();
 await page.getByRole("heading", { name: "MS1 acquisition map" }).waitFor();
 assert.deepEqual(errors, []);
 console.log(JSON.stringify({ pageErrors: errors, editor: "passed", artifacts }));

@@ -8,6 +8,12 @@ Initial release.
 
 - Installable Python package with a FastAPI service and bundled React/TypeScript
   dashboard for inspecting mass spectrometry and proteomics data in a browser.
+- Persistent project library with stable project IDs, draft saving, reopening,
+  editing, duplication, JSON import/export, archive/restore, and separate cache
+  clearing and project deletion.
+- Incremental project preparation that reuses unchanged acquisition data, refreshes
+  affected identification scopes, and preserves the previous usable revision when
+  updates fail. Durable project definitions remain separate from disposable caches.
 - Interactive project setup with sample/fraction assignments for mzML files and
   sample-level identification layers for idXML files. Includes filesystem
   browsing, batch file selection, and input validation.

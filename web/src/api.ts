@@ -195,6 +195,7 @@ export interface AcquisitionInput {
 
 /** The manifest shared by JSON import/export and the interactive project editor. */
 export interface ProjectConfiguration {
+  id?: string;
   protein_groupings?: ProteinGroupingInput[];
   name: string;
   acquisitions: AcquisitionInput[];
@@ -207,6 +208,8 @@ export interface ProjectConfiguration {
 
 /** Server preparation state, polled independently of the visible application tab. */
 export interface ProjectStatus {
+  project_id?: string | null;
+  active_project_id?: string | null;
   state: string;
   message: string;
   progress: number; // Preparation fraction between 0 and 1.
@@ -268,4 +271,29 @@ export interface ProjectSummary {
   name: string;
   acquisitions: Acquisition[];
   protein_groupings: ProteinGroupingSummary[];
+}
+
+/** Saved project metadata from the durable library; source arrays stay in configuration. */
+export interface LibraryProject {
+  id: string;
+  name: string;
+  configuration: ProjectConfiguration;
+  revision: number;
+  created_at: string;
+  modified_at: string;
+  opened_at: string | null;
+  archived: boolean;
+  status: string;
+  samples: number;
+  fractions: number;
+  has_cache: boolean;
+  cache_directory: string;
+  error: string;
+}
+
+/** Expensive acquisition work required to apply a proposed project configuration. */
+export interface PreparationPlan {
+  added: number;
+  changed: number;
+  reused: number;
 }

@@ -82,7 +82,7 @@ def test_peptide_target_is_independent_of_isolation_center(tmp_path: Path) -> No
         assert no_scans["psms"] == []
         map_data = client.get(base + "/sources/fraction_01/map").json()
         assert map_data["scale_max"] >= np.max(map_data["intensity"])
-        with np.load(tmp_path / "cache" / state["token"] / "fraction_01.npz") as grid:
+        with np.load(client.app.state.runtime.active[2] / "fraction_01.npz") as grid:
             map_sum = grid["grid"].sum()
         original = oms.MSExperiment()
         oms.MzMLFile().load(str(manifest.parent / "fraction_01.mzML"), original)

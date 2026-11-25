@@ -400,3 +400,22 @@ footer span {
 .results .panel-title {
   flex-wrap: wrap;
 }
+
+/* The project library is metadata-only; scientific plots remain in their workspace. */
+.application > header nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.application > header nav .mantine-Select-root { width: 240px; }
+.project-library { max-width: 1500px; margin: auto; padding: 28px; }
+.library-table { overflow-x: auto; }
+.project-library h1 { margin: 0; }
+.setup-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.preparation-plan { font-size: 13px; margin: 12px 0; }
+
+.project-details { margin: 16px 0; font-size: 13px; }
+.project-details summary { cursor: pointer; font-weight: 600; }
+.project-details dl { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+.project-details dd { margin: 0; overflow-wrap: anywhere; }

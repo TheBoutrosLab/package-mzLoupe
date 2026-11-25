@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -51,8 +52,9 @@ class ProteinGroupingInput(BaseModel):
 class ProjectInput(BaseModel):
     """Validate a project manifest and resolve its local source-file associations."""
 
+    id: str = Field(default_factory=lambda: str(uuid4()), pattern=r"^[a-f0-9-]{36}$")
     name: str = Field(min_length=1)
-    acquisitions: list[AcquisitionInput] = Field(min_length=1)
+    acquisitions: list[AcquisitionInput] = Field(default_factory=list)
     samples: list[SampleInput] = Field(default_factory=list)
 
     protein_groupings: list[ProteinGroupingInput] = Field(default_factory=list)

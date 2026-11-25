@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 import numpy as np
 import pyopenms as oms
@@ -37,6 +38,7 @@ class DemoProject:
             layers.append({"name": label, "path": idpath.name})
         manifest = directory / "project.json"
         project = {
+            "id": str(uuid4()),
             "name": "Synthetic DDA demonstration",
             "samples": [{"name": "Synthetic sample", "identifications": layers}],
             "acquisitions": acquisitions,

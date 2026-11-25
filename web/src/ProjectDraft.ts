@@ -38,7 +38,8 @@ export class ProjectDraft {
     public readonly name = "Untitled project",
     public readonly acquisitions: AcquisitionInput[] = [],
     public readonly identifications: IdentificationRow[] = [],
-    public readonly groupings: ProteinGroupingRow[] = []
+    public readonly groupings: ProteinGroupingRow[] = [],
+    public readonly id: string = crypto.randomUUID()
   ) {}
 
   /** Convert sample-level identification and grouping inputs into editable rows. */
@@ -61,7 +62,8 @@ export class ProjectDraft {
       (configuration.protein_groupings || []).map((row) => ({
         ...row,
         id: crypto.randomUUID()
-      }))
+      })),
+      configuration.id || crypto.randomUUID()
     );
   }
 
@@ -85,7 +87,8 @@ export class ProjectDraft {
       name,
       this.acquisitions,
       this.identifications,
-      this.groupings
+      this.groupings,
+      this.id
     );
   }
 
@@ -103,7 +106,13 @@ export class ProjectDraft {
           }
         : row
     );
-    return new ProjectDraft(this.name, rows, this.identifications, this.groupings);
+    return new ProjectDraft(
+      this.name,
+      rows,
+      this.identifications,
+      this.groupings,
+      this.id
+    );
   }
 
   /** Update one sample-level identification association by its editor row ID. */
@@ -120,7 +129,7 @@ export class ProjectDraft {
           }
         : row
     );
-    return new ProjectDraft(this.name, this.acquisitions, rows, this.groupings);
+    return new ProjectDraft(this.name, this.acquisitions, rows, this.groupings, this.id);
   }
 
   /**
@@ -149,7 +158,13 @@ export class ProjectDraft {
         mzml: path
       });
     }
-    return new ProjectDraft(this.name, rows, this.identifications, this.groupings);
+    return new ProjectDraft(
+      this.name,
+      rows,
+      this.identifications,
+      this.groupings,
+      this.id
+    );
   }
 
   /** Associate selected idXML paths with the chosen sample and layer. */
@@ -164,7 +179,8 @@ export class ProjectDraft {
       this.name,
       this.acquisitions,
       [...this.identifications, ...rows],
-      this.groupings
+      this.groupings,
+      this.id
     );
   }
 
@@ -174,7 +190,8 @@ export class ProjectDraft {
       this.name,
       this.acquisitions.filter((row) => row.id !== id),
       this.identifications,
-      this.groupings
+      this.groupings,
+      this.id
     );
   }
 
@@ -184,7 +201,8 @@ export class ProjectDraft {
       this.name,
       this.acquisitions,
       this.identifications.filter((row) => row.id !== id),
-      this.groupings
+      this.groupings,
+      this.id
     );
   }
 
@@ -192,17 +210,23 @@ export class ProjectDraft {
   addGrouping(): ProjectDraft {
     let number = 1;
     while (this.groupings.some((row) => row.name === `Grouping ${number}`)) number++;
-    return new ProjectDraft(this.name, this.acquisitions, this.identifications, [
-      ...this.groupings,
-      {
-        id: crypto.randomUUID(),
-        name: `Grouping ${number}`,
-        path: "",
-        collection: "",
-        samples: [],
-        layers: []
-      }
-    ]);
+    return new ProjectDraft(
+      this.name,
+      this.acquisitions,
+      this.identifications,
+      [
+        ...this.groupings,
+        {
+          id: crypto.randomUUID(),
+          name: `Grouping ${number}`,
+          path: "",
+          collection: "",
+          samples: [],
+          layers: []
+        }
+      ],
+      this.id
+    );
   }
 
   /** A new file requires a fresh collection choice after its contents are inspected. */
@@ -216,7 +240,13 @@ export class ProjectDraft {
         ...changes
       };
     });
-    return new ProjectDraft(this.name, this.acquisitions, this.identifications, rows);
+    return new ProjectDraft(
+      this.name,
+      this.acquisitions,
+      this.identifications,
+      rows,
+      this.id
+    );
   }
 
   /** Remove an inference view without changing any PSM or acquisition inputs. */
@@ -225,7 +255,8 @@ export class ProjectDraft {
       this.name,
       this.acquisitions,
       this.identifications,
-      this.groupings.filter((row) => row.id !== id)
+      this.groupings.filter((row) => row.id !== id),
+      this.id
     );
   }
 
@@ -389,6 +420,7 @@ export class ProjectDraft {
       }))
       .filter((row) => row.identifications.length > 0);
     return {
+      id: this.id,
       name: this.name.trim(),
       protein_groupings: this.groupings.map(({ id, ...row }) => ({
         ...row,
