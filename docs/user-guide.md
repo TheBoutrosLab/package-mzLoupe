@@ -229,7 +229,9 @@ Adding a fraction prepares only that acquisition and re-resolves the affected sa
 layer; renaming a project or changing grouping does not reread mzML.
 
 Updates stage complete metadata snapshots inside the same project directory before
-publishing them. Unchanged maps and indexed working copies share disk storage.
+publishing them. Unchanged maps and indexed working copies use hard links to share
+disk storage where supported, or metadata-preserving copies when hard links are
+unavailable. An acquisition with missing catalog headers is re-indexed.
 Superseded snapshots are collected after the server finishes its readers when the
 project is closed or the server shuts down.
 A project cache has one server owner at a time; another server can browse its saved

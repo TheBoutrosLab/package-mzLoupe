@@ -1,5 +1,6 @@
 """Exercise durable project identity, incremental preparation, and failed update recovery."""
 
+import errno
 import gzip
 import json
 import os
@@ -278,8 +279,9 @@ def test_lost_cache_artifact_is_rebuilt_without_losing_the_project(tmp_path: Pat
         assert (client.app.state.runtime.active[2] / "fraction_01.npz").is_file()
 
 
+@pytest.mark.parametrize("link_error", [None, errno.EXDEV, errno.EOPNOTSUPP, errno.EPERM])
 def test_reused_gzip_working_copy_survives_snapshot_cleanup(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, link_error: int | None
 ) -> None:
     """Reused indexed files stay valid after old snapshots are collected on shutdown."""
     project = ProjectInput.load(DemoProject().write(tmp_path / "data"))
@@ -298,8 +300,20 @@ def test_reused_gzip_working_copy_survives_snapshot_cleanup(
             raise RuntimeError("Reused mzML was decoded again")
 
         monkeypatch.setattr(ProjectPreparer, "acquisition", reject_decode)
+        if link_error is not None:
+
+            def unsupported_link(_source: Path, _destination: Path) -> None:
+                """Exercise copying of both maps and the generated indexed mzML."""
+                raise OSError(link_error, "Hard linking unavailable")
+
+            monkeypatch.setattr(os, "link", unsupported_link)
         updated = open_project(client, project)
         current = client.app.state.runtime.active[2]
+        for source in previous.iterdir():
+            if source.suffix in {".npz", ".mzML"}:
+                destination = current / source.name
+                assert destination.read_bytes() == source.read_bytes()
+                assert os.path.samefile(source, destination) == (link_error is None)
         assert (
             client.get(
                 f"/api/projects/{updated['token']}/sources/fraction_01/spectra/79"
@@ -438,3 +452,58 @@ def test_library_deletion_rejects_a_redirected_project_directory(
         assert response.status_code == 400 and "without symlinks" in response.json()["detail"]
         assert sentinel.read_text() == "Original data"
         assert client.get(f"/api/library/{identifier}").status_code == 200
+
+
+def test_missing_acquisition_header_reindexes_before_reusing_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repair a missing catalog acquisition despite matching fingerprints and stale scans."""
+    project = ProjectInput.load(DemoProject().write(tmp_path / "data"))
+    missing = project.acquisitions[0]
+    indexed = []
+    original_index = ProjectPreparer.acquisition
+    original_link = os.link
+    with TestClient(create_app(tmp_path / "cache")) as client:
+        open_project(client, project)
+        previous = client.app.state.runtime.active[2]
+        catalog = client.app.state.runtime.active[1]
+        expected_scans = len(
+            catalog.rows("SELECT ordinal FROM scans WHERE source=?", (missing.id,))
+        )
+        with catalog.connect() as connection:
+            connection.execute("DELETE FROM acquisitions WHERE id=?", (missing.id,))
+            connection.execute("UPDATE scans SET rt=-1 WHERE source=?", (missing.id,))
+        # A fraction-label edit requires a staged update while all file signatures stay the same.
+        project.acquisitions[1].fraction = "Renamed fraction"
+
+        def index_acquisition(preparer: ProjectPreparer, target, source) -> None:
+            """Record which raw acquisition actually needs rebuilding."""
+            indexed.append(source.id)
+            original_index(preparer, target, source)
+
+        def link_valid_artifact(source: Path, destination: Path) -> None:
+            """Reject partial reuse of an acquisition before its missing header is detected."""
+            assert Path(source).stem != missing.id
+            original_link(source, destination)
+
+        monkeypatch.setattr(ProjectPreparer, "acquisition", index_acquisition)
+        monkeypatch.setattr(os, "link", link_valid_artifact)
+        updated = open_project(client, project)
+        current = client.app.state.runtime.active[2]
+        rebuilt = client.app.state.runtime.active[1]
+        assert indexed == [missing.id]
+        assert len(rebuilt.rows("SELECT id FROM acquisitions")) == 2
+        assert (
+            len(rebuilt.rows("SELECT ordinal FROM scans WHERE source=?", (missing.id,)))
+            == expected_scans
+        )
+        assert rebuilt.scan(missing.id, 79)["rt"] == 237
+        assert not os.path.samefile(
+            previous / (missing.id + ".npz"), current / (missing.id + ".npz")
+        )
+        assert (
+            client.get(
+                f"/api/projects/{updated['token']}/sources/{missing.id}/spectra/79"
+            ).status_code
+            == 200
+        )

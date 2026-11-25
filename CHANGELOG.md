@@ -13,7 +13,9 @@ Initial release.
   clearing and project deletion.
 - Incremental project preparation that reuses unchanged acquisition data, refreshes
   affected identification scopes, and preserves the previous usable revision when
-  updates fail. Durable project definitions remain separate from disposable caches.
+  updates fail. Artifact reuse supports copying when hard links are unavailable and
+  re-indexes acquisitions with missing catalog headers. Durable project definitions
+  remain separate from disposable caches.
 - Configurable cache roots with project UUID directories, local cache availability,
   and boundary checks for cache writes and cleanup.
 - Interactive project setup with sample/fraction assignments for mzML files and

@@ -1,9 +1,11 @@
 """Prepare sources sequentially and publish the entire project atomically."""
 
 from collections.abc import Callable
+import errno
 from pathlib import Path
 import json
 import os
+import shutil
 import sqlite3
 
 import numpy as np
@@ -71,21 +73,20 @@ class ProjectPreparer:
                     connection.execute("DELETE FROM acquisitions WHERE id=?", (row["id"],))
             connection.execute("DELETE FROM layers")
         for number, acquisition in enumerate(project.acquisitions):
-            reusable = (
+            unchanged = (
                 old.get("acquisitions", {}).get(acquisition.id)
                 == state["acquisitions"][acquisition.id]
             )
-            progress(
-                f"{'Reusing' if reusable else 'Indexing'} {acquisition.fraction}",
-                number / len(project.acquisitions),
-            )
-            if reusable and previous is not None:
-                self.reuse(catalog, acquisition, previous)
-            else:
-                with catalog.connect() as connection:
-                    connection.execute("DELETE FROM scans WHERE source=?", (acquisition.id,))
-                    connection.execute("DELETE FROM acquisitions WHERE id=?", (acquisition.id,))
-                self.acquisition(catalog, acquisition)
+            if unchanged and previous is not None:
+                progress(f"Reusing {acquisition.fraction}", number / len(project.acquisitions))
+                if self.reuse(catalog, acquisition, previous):
+                    continue
+            # Missing catalog headers make reuse impossible even when the file is unchanged.
+            progress(f"Indexing {acquisition.fraction}", number / len(project.acquisitions))
+            with catalog.connect() as connection:
+                connection.execute("DELETE FROM scans WHERE source=?", (acquisition.id,))
+                connection.execute("DELETE FROM acquisitions WHERE id=?", (acquisition.id,))
+            self.acquisition(catalog, acquisition)
 
     @staticmethod
     def update_identifications(
@@ -109,15 +110,20 @@ class ProjectPreparer:
                 with catalog.connect() as connection:
                     importer.register_layers(connection=connection, source_ids=sources, layer=layer)
 
-    def reuse(self, catalog: ProjectCatalog, acquisition: AcquisitionInput, previous: Path) -> None:
-        """Link immutable map/working-copy files without decoding mzML again."""
+    def reuse(self, catalog: ProjectCatalog, acquisition: AcquisitionInput, previous: Path) -> bool:
+        """Carry prepared artifacts forward, or return False when catalog headers are missing.
+
+        Check the catalog before creating files so the caller can safely re-index
+        this acquisition without overwriting a hard-linked artifact from the old revision.
+        """
+        rows = catalog.rows("SELECT path FROM acquisitions WHERE id=?", (acquisition.id,))
+        if not rows:
+            return False
+        path = rows[0]["path"]
         for suffix in (".npz", ".mzML"):
             source = previous / (acquisition.id + suffix)
             if source.is_file():
-                os.link(source, self.workspace / source.name)
-        path = catalog.rows("SELECT path FROM acquisitions WHERE id=?", (acquisition.id,))[0][
-            "path"
-        ]
+                self.link_or_copy(source, self.workspace / source.name)
         if Path(path).parent == previous:
             path = str(self.workspace / Path(path).name)
         with catalog.connect() as connection:
@@ -125,6 +131,27 @@ class ProjectPreparer:
                 "UPDATE acquisitions SET sample=?, fraction=?, path=? WHERE id=?",
                 (acquisition.sample, acquisition.fraction, path, acquisition.id),
             )
+        return True
+
+    @staticmethod
+    def link_or_copy(source: Path, destination: Path) -> None:
+        """Share an immutable artifact when possible; copy it if hard links are unavailable.
+
+        Keep unrelated errors visible, including missing files, existing destinations,
+        I/O failures, and exhausted storage. A failed fallback copy also propagates.
+        """
+        try:
+            os.link(source, destination)
+        except OSError as error:
+            if error.errno not in {
+                errno.EXDEV,
+                errno.ENOTSUP,
+                errno.EOPNOTSUPP,
+                errno.ENOSYS,
+                errno.EPERM,
+            }:
+                raise
+            shutil.copy2(source, destination)
 
     def acquisition(self, catalog: ProjectCatalog, acquisition: AcquisitionInput) -> None:
         """Store scan metadata and a fixed-size MS1 map without retaining all peaks."""
