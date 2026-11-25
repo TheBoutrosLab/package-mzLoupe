@@ -212,3 +212,106 @@ def test_no_matched_fragments_is_explicit(dia_session: DiaSession) -> None:
     )
     assert response.status_code == 400
     assert "No b/y fragments match" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "lower_shift, upper_shift",
+    [(1e-9, 1e-9), (-1e-9, -1e-9), (1e-9, -1e-9), (5e-7, -5e-7)],
+)
+def test_window_precision_differences_preserve_scan_selection(
+    dia_session: DiaSession, lower_shift: float, upper_shift: float
+) -> None:
+    """Treat tiny changes in either endpoint as the same window without rounding storage."""
+    client, base, psm = dia_session
+    catalog = client.app.state.runtime.active[1]
+    with catalog.connect() as connection:
+        connection.execute(
+            "UPDATE scans SET isolation_lower_mz=?, isolation_upper_mz=? "
+            "WHERE source=? AND ordinal IN (71,87)",
+            (390 + lower_shift, 410 + upper_shift, psm["source"]),
+        )
+    response = client.post(
+        base + "/fragment-xic", json={"psm_id": psm["id"], "start": 210, "stop": 280}
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["rt"] == [213, 237, 261]
+    assert all(fragment["intensity"][0] > 0 for fragment in result["fragments"])
+    assert all(fragment["intensity"][-1] == 0 for fragment in result["fragments"])
+    stored = catalog.scan(psm["source"], 71)
+    assert stored["isolation_lower_mz"] == 390 + lower_shift
+    assert stored["isolation_upper_mz"] == 410 + upper_shift
+
+
+@pytest.mark.parametrize("boundary", [390.0, 410.0])
+@pytest.mark.parametrize("offset", [-1e-9, 0.0, 1e-9])
+def test_window_containment_tolerates_boundary_precision(
+    dia_session: DiaSession, boundary: float, offset: float
+) -> None:
+    """Use the same small margin for selected PSMs and eligible scan containment."""
+    client, base, psm = dia_session
+    with client.app.state.runtime.active[1].connect() as connection:
+        connection.execute(
+            "UPDATE psms SET precursor_mz=? WHERE id=?", (boundary + offset, psm["id"])
+        )
+        connection.execute(
+            "UPDATE scans SET isolation_lower_mz=?, isolation_upper_mz=? "
+            "WHERE source=? AND ordinal=71",
+            (390 + 1e-9, 410 - 1e-9, psm["source"]),
+        )
+    response = client.post(
+        base + "/fragment-xic", json={"psm_id": psm["id"], "start": 210, "stop": 280}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["rt"] == [213, 237, 261]
+
+
+@pytest.mark.parametrize("mz", [390 - 1e-4, 410 + 1e-4])
+def test_window_containment_rejects_precursors_beyond_precision_margin(
+    dia_session: DiaSession, mz: float
+) -> None:
+    """Do not extend physical isolation coverage by an extraction-style ppm tolerance."""
+    client, base, psm = dia_session
+    with client.app.state.runtime.active[1].connect() as connection:
+        connection.execute("UPDATE psms SET precursor_mz=? WHERE id=?", (mz, psm["id"]))
+    response = client.post(
+        base + "/fragment-xic", json={"psm_id": psm["id"], "start": 210, "stop": 280}
+    )
+    assert response.status_code == 400
+    assert "outside the selected isolation window" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("lower, upper", [(390 + 1e-4, 410), (390, 410 - 1e-4)])
+def test_window_comparison_rejects_distinct_endpoints(
+    dia_session: DiaSession, lower: float, upper: float
+) -> None:
+    """Compare both bounds with an absolute margin; no relative tolerance may merge them."""
+    client, base, psm = dia_session
+    with client.app.state.runtime.active[1].connect() as connection:
+        connection.execute(
+            "UPDATE scans SET isolation_lower_mz=?, isolation_upper_mz=? "
+            "WHERE source=? AND ordinal=71",
+            (lower, upper, psm["source"]),
+        )
+    response = client.post(
+        base + "/fragment-xic", json={"psm_id": psm["id"], "start": 210, "stop": 280}
+    )
+    assert response.status_code == 400
+    assert "non-overlapping" in response.json()["detail"]
+
+
+def test_window_comparison_does_not_chain_small_differences(dia_session: DiaSession) -> None:
+    """Anchor every comparison to the selected scan so repeated drift cannot merge windows."""
+    client, base, psm = dia_session
+    with client.app.state.runtime.active[1].connect() as connection:
+        for ordinal, shift in [(71, 0.75e-6), (87, 1.5e-6)]:
+            connection.execute(
+                "UPDATE scans SET isolation_lower_mz=?, isolation_upper_mz=? "
+                "WHERE source=? AND ordinal=?",
+                (390 + shift, 410 + shift, psm["source"], ordinal),
+            )
+    response = client.post(
+        base + "/fragment-xic", json={"psm_id": psm["id"], "start": 210, "stop": 280}
+    )
+    assert response.status_code == 400
+    assert "non-overlapping" in response.json()["detail"]

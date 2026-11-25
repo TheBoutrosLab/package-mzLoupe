@@ -44,7 +44,8 @@ Initial release.
   spectrum intensity, ambiguous-assignment indicators, DIA trace selection presets,
   stable ion colors, and linked spectrum/chromatogram highlighting.
 - Explicit per-acquisition DIA/DDA/Unknown modes and catalog isolation bounds,
-  with validation of supported conventional DIA windows and bounded trace caching.
+  with validation of conventional DIA windows using a small absolute tolerance
+  for isolation metadata, plus bounded trace caching.
 - Optional chromatogram PSM marks spanning all identification layers and ranks
   within the extraction window, with grouped scan evidence, assignment details
   on hover, and spectrum selection on click.

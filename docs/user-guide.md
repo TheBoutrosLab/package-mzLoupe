@@ -309,6 +309,10 @@ Pending requests are cancelled when their selection or interval changes.
 
 This initial implementation expects original conventional DIA acquisition scans in
 the loaded mzML, with one fixed isolation window covering the selected precursor.
+Window comparisons allow absolute differences up to `1e-6 m/z` in each bound,
+including precursor containment at the boundaries. Stored bounds retain their
+original precision. All windows are compared to the selected scan's window so
+small differences cannot accumulate into a different window.
 Missing window metadata and overlapping/staggered windows give an explicit error.
 Reconstructed pseudo-MS/MS files, AIF, and diaPASEF are outside this initial scope.
 An empty RT interval reports that no eligible scans are available.

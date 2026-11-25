@@ -13,6 +13,9 @@ from mzloupe.storage.catalog import ProjectCatalog
 class FragmentXicExtractor:
     """Keep DIA scan eligibility separate from peak matching and UI state."""
 
+    # Absolute m/z tolerance for isolation metadata, independent of extraction ppm.
+    window_tolerance = 1e-6
+
     def __init__(self, catalog: ProjectCatalog) -> None:
         """Use the current prepared metadata snapshot without opening raw data."""
         self.catalog = catalog
@@ -37,7 +40,7 @@ class FragmentXicExtractor:
         lower, upper = psm["isolation_lower_mz"], psm["isolation_upper_mz"]
         if psm["level"] != 2 or lower is None or upper is None:
             raise ValueError("The selected spectrum has no usable MS2 isolation window")
-        if not lower <= mz <= upper:
+        if lower > mz + self.window_tolerance or upper < mz - self.window_tolerance:
             raise ValueError("The peptide precursor lies outside the selected isolation window")
         return psm
 
@@ -49,15 +52,7 @@ class FragmentXicExtractor:
         Unknown windows in the extraction interval must not silently lose measurements.
         """
         source, mz = psm["source"], psm["precursor_mz"]
-        windows = self.catalog.rows(
-            "SELECT DISTINCT isolation_lower_mz, isolation_upper_mz FROM scans "
-            "WHERE source=? AND level=2 AND isolation_lower_mz<=? AND isolation_upper_mz>=?",
-            (source, mz, mz),
-        )
-        if len(windows) != 1:
-            raise ValueError(
-                "Fragment XICs currently require one fixed, non-overlapping DIA window"
-            )
+        self.validate_window(psm)
         unknown = self.catalog.rows(
             "SELECT 1 FROM scans WHERE source=? AND level=2 AND rt BETWEEN ? AND ? "
             "AND (isolation_lower_mz IS NULL OR isolation_upper_mz IS NULL) LIMIT 1",
@@ -69,8 +64,40 @@ class FragmentXicExtractor:
             "SELECT ordinal, rt FROM scans WHERE source=? AND level=2 "
             "AND rt BETWEEN ? AND ? AND isolation_lower_mz<=? AND isolation_upper_mz>=? "
             "ORDER BY rt, ordinal",
-            (source, start, stop, mz, mz),
+            (
+                source,
+                start,
+                stop,
+                mz + self.window_tolerance,
+                mz - self.window_tolerance,
+            ),
         )
+
+    def validate_window(self, psm: dict[str, Any]) -> None:
+        """Reject distinct windows while allowing tiny differences in their stored bounds.
+
+        Anchor both endpoints to the selected spectrum rather than grouping neighboring
+        windows transitively. Use only an absolute tolerance, so larger precursor masses
+        do not permit larger window differences. Preserve the original catalog values.
+        """
+        different = self.catalog.rows(
+            "SELECT 1 FROM scans WHERE source=? AND level=2 "
+            "AND isolation_lower_mz<=? AND isolation_upper_mz>=? "
+            "AND (ABS(isolation_lower_mz-?)>? OR ABS(isolation_upper_mz-?)>?) LIMIT 1",
+            (
+                psm["source"],
+                psm["precursor_mz"] + self.window_tolerance,
+                psm["precursor_mz"] - self.window_tolerance,
+                psm["isolation_lower_mz"],
+                self.window_tolerance,
+                psm["isolation_upper_mz"],
+                self.window_tolerance,
+            ),
+        )
+        if different:
+            raise ValueError(
+                "Fragment XICs currently require one fixed, non-overlapping DIA window"
+            )
 
     def extract(
         self,
