@@ -74,6 +74,15 @@ class ProjectRegistry:
             "error": row["error"],
         }
 
+    def source_identifier(self, source_path: Path) -> str | None:
+        """Find a manifest's saved identity without registering or changing its project."""
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT project_id FROM project_sources WHERE path=?",
+                (str(source_path),),
+            ).fetchone()
+        return row["project_id"] if row is not None else None
+
     def save(self, project: ProjectInput, source_path: Path | None = None) -> dict[str, Any]:
         """Save changes under the same ID; an imported path remembers its registered identity."""
         now = datetime.now(timezone.utc).isoformat()

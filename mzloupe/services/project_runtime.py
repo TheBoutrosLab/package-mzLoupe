@@ -9,6 +9,7 @@ from typing import Any
 from mzloupe.models import ProjectInput
 from mzloupe.services.preparation import ProjectPreparer
 from mzloupe.services.project_cache import ProjectCache
+from mzloupe.services.project_operations import ProjectOperations
 from mzloupe.services.protein_grouping import ProteinGroupings
 from mzloupe.services.psm_search import PsmSearch
 from mzloupe.services.signal import SignalService
@@ -28,6 +29,7 @@ class ProjectRuntime:
         self.registry = ProjectRegistry(registry or ProjectRegistry.default_path())
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.lock = Lock()
+        self.operations = ProjectOperations()
         self.signal_lock = Lock()
         self.metadata_lock = Lock()
         self.search_lock = Lock()
@@ -44,14 +46,32 @@ class ProjectRuntime:
         }
 
     def cache_for(self, identifier: str) -> ProjectCache:
-        """Resolve the same project directory across edits, opens, and server restarts."""
-        if identifier in self.caches:
-            return self.caches[identifier]
-        record = self.registry.get(identifier)
-        cache = ProjectCache(self.cache, record["id"], self.cache_version)
+        """Acquire a lease outside the state lock for a reserved project operation.
+
+        Callers reserve the project before requesting a new lease, so another
+        operation cannot create or detach its cache during this filesystem work.
+        """
+        with self.lock:
+            existing = self.caches.get(identifier)
+        if existing is not None:
+            return existing
+        self.registry.get(identifier)
+        cache = ProjectCache(self.cache, identifier, self.cache_version)
         cache.acquire()
-        self.caches[identifier] = cache
+        with self.lock:
+            self.caches[identifier] = cache
         return cache
+
+    def save_configuration(self, project: ProjectInput) -> dict[str, Any]:
+        """Save an edited definition without racing project deletion or preparing data."""
+        with self.lock:
+            self.operations.reserve(project.id, "saving")
+        try:
+            project.resolve_paths(Path.cwd(), validate_files=False)
+            return self.registry.save(project)
+        finally:
+            with self.lock:
+                self.operations.release(project.id)
 
     def preparation_plan(self, project: ProjectInput) -> dict[str, int]:
         """Preview reuse without locking a project merely because its editor is open."""
@@ -62,25 +82,57 @@ class ProjectRuntime:
         """Register a manifest once and prepare its saved project identity."""
         path = Path(path).expanduser().resolve()
         project = ProjectInput.load(path, validate_files=False)
-        self.registry.save(project, source_path=path)
-        self.open_configuration(project)
+        self.open_configuration(project, source_path=path)
 
-    def open_configuration(self, project: ProjectInput) -> None:
-        """Save a valid definition and queue preparation while keeping previous results usable."""
+    def open_configuration(self, project: ProjectInput, *, source_path: Path | None = None) -> None:
+        """Reserve an edited project before doing validation, registry, or cache disk work."""
+        identifier = project.id
         with self.lock:
-            if self.status["state"] == "preparing":
-                raise ValueError("Project preparation is already running")
-            if not project.acquisitions:
-                raise ValueError("Add at least one mzML acquisition before exploring")
-            project.resolve_paths(Path.cwd(), validate_files=False)
-            self.registry.save(project)
-            try:
-                project.resolve_paths(Path.cwd())
-            except ValueError as error:
-                self.registry.report_error(project.id, str(error))
-                raise
-            self.cache_for(project.id)
-            self.registry.opened(project.id)
+            self.operations.reserve(identifier, "preparing")
+        queued = False
+        try:
+            if source_path is not None and "id" not in project.model_fields_set:
+                registered = self.registry.source_identifier(source_path)
+                if registered is not None:
+                    with self.lock:
+                        self.operations.reassign(identifier, registered)
+                    identifier = registered
+                project.id = identifier
+            self.queue_preparation(project, source_path=source_path)
+            queued = True
+        finally:
+            if not queued:
+                with self.lock:
+                    self.operations.release(identifier)
+
+    def open_project(self, identifier: str) -> None:
+        """Reserve a saved identity before loading its definition, preventing delete/open races."""
+        with self.lock:
+            self.operations.reserve(identifier, "preparing")
+        queued = False
+        try:
+            project = ProjectInput.model_validate(self.registry.get(identifier)["configuration"])
+            self.queue_preparation(project)
+            queued = True
+        finally:
+            if not queued:
+                with self.lock:
+                    self.operations.release(identifier)
+
+    def queue_preparation(self, project: ProjectInput, *, source_path: Path | None = None) -> None:
+        """Validate and queue a reserved project without holding the runtime state lock."""
+        if not project.acquisitions:
+            raise ValueError("Add at least one mzML acquisition before exploring")
+        project.resolve_paths(Path.cwd(), validate_files=False)
+        self.registry.save(project, source_path=source_path)
+        try:
+            project.resolve_paths(Path.cwd())
+        except ValueError as error:
+            self.registry.report_error(project.id, str(error))
+            raise
+        self.cache_for(project.id)
+        self.registry.opened(project.id)
+        with self.lock:
             self.status = {
                 "state": "preparing",
                 "message": "Reading sources",
@@ -91,20 +143,24 @@ class ProjectRuntime:
         task.add_done_callback(lambda completed: self.preparation_finished(project, completed))
 
     def preparation_finished(self, project: ProjectInput, task: Future[None]) -> None:
-        """Surface unexpected worker failures instead of leaving the UI preparing forever."""
-        if task.cancelled():
-            return
-        error = task.exception()
-        if error is not None:
-            message = str(error) or type(error).__name__
+        """Surface worker failures and release preparation's reservation on every exit."""
+        try:
+            if task.cancelled():
+                return
+            error = task.exception()
+            if error is not None:
+                message = str(error) or type(error).__name__
+                with self.lock:
+                    self.status = {
+                        "state": "error",
+                        "message": message,
+                        "progress": 0,
+                        "project_id": project.id,
+                    }
+                self.registry.report_error(project.id, message)
+        finally:
             with self.lock:
-                self.status = {
-                    "state": "error",
-                    "message": message,
-                    "progress": 0,
-                    "project_id": project.id,
-                }
-            self.registry.report_error(project.id, message)
+                self.operations.release(project.id)
 
     def progress(self, message: str, progress: float) -> None:
         """Publish preparation progress without replacing the previous active snapshot."""
@@ -205,8 +261,10 @@ class ProjectRuntime:
             state = "draft"
         if record["error"]:
             state = "preparation failed"
-        if self.status.get("project_id") == record["id"] and self.status["state"] == "preparing":
-            state = "preparing"
+        with self.lock:
+            action = self.operations.action(record["id"])
+        if action is not None:
+            state = action
         return {
             **record,
             "name": configuration["name"],
@@ -218,44 +276,68 @@ class ProjectRuntime:
         }
 
     def close_project(self, identifier: str) -> None:
-        """Release a selected workspace so its cache can be cleared without restarting."""
-        self.registry.get(identifier)
-        with self.signal_lock, self.search_lock, self.metadata_lock, self.lock:
-            if self.status["state"] == "preparing":
-                raise ValueError("Wait for preparation to finish before closing a project")
-            if self.active is None or self.active[0].id != identifier:
-                return
-            self.active = None
-            self.signal = None
-            self.search = None
-            self.token = None
-            self.status = {
-                "state": "empty",
-                "message": "Select a project",
-                "progress": 0,
-                "project_id": None,
-            }
-            cache = self.caches.pop(identifier, None)
+        """Detach readers under their locks, then prune outside every runtime access lock."""
+        with self.lock:
+            self.operations.reserve(identifier, "closing")
+        cache = None
+        try:
+            self.registry.get(identifier)
+            with self.signal_lock, self.search_lock, self.metadata_lock, self.lock:
+                if self.active is not None and self.active[0].id == identifier:
+                    self.active = None
+                    self.signal = None
+                    self.search = None
+                    self.token = None
+                    if self.status.get("project_id") == identifier:
+                        self.status = {
+                            "state": "empty",
+                            "message": "Select a project",
+                            "progress": 0,
+                            "project_id": None,
+                        }
+                cache = self.caches.pop(identifier, None)
             if cache is not None:
-                try:
-                    cache.prune()
-                finally:
-                    cache.release()
+                cache.prune()
+        finally:
+            if cache is not None:
+                cache.release()
+            with self.lock:
+                self.operations.release(identifier)
 
     def clear_cache(self, identifier: str) -> None:
         """Clear derived artifacts while retaining the saved definition and original files."""
+        self.remove_project_cache(identifier, delete_project=False)
+
+    def delete_project(self, identifier: str) -> None:
+        """Reserve a project until its cache and saved registry entry have both been removed."""
+        self.remove_project_cache(identifier, delete_project=True)
+
+    def remove_project_cache(self, identifier: str, *, delete_project: bool) -> None:
+        """Keep the file lease through disk cleanup while releasing the runtime state lock."""
         with self.lock:
-            if self.status.get("project_id") == identifier and self.status["state"] == "preparing":
-                raise ValueError("Wait for preparation to finish before clearing this cache")
-            if self.active is not None and self.active[0].id == identifier:
-                raise ValueError("Close the project before clearing its cache")
-            cache = self.cache_for(identifier)
-            try:
-                cache.clear()
-            finally:
+            self.operations.reserve(
+                identifier,
+                "deleting" if delete_project else "clearing",
+                active=self.active[0].id if self.active else None,
+            )
+        cache = None
+        try:
+            self.registry.get(identifier)
+            with self.lock:
+                cache = self.caches.pop(identifier, None)
+            if cache is None:
+                cache = ProjectCache(self.cache, identifier, self.cache_version)
+                cache.acquire()
+            cache.clear()
+            if delete_project:
+                self.registry.delete(identifier)
+            else:
+                self.registry.report_error(identifier, "")
+        finally:
+            if cache is not None:
                 cache.release()
-                self.caches.pop(identifier, None)
-            self.registry.report_error(identifier, "")
+            with self.lock:
+                self.operations.release(identifier)
 
     def snapshot(self, token: str) -> tuple[ProjectInput, ProjectCatalog, Path]:
         """Return the active session only if the caller's project token still matches."""
@@ -284,6 +366,8 @@ class ProjectRuntime:
 
     def close(self) -> None:
         """Finish readers before collecting superseded temporary metadata snapshots."""
+        with self.lock:
+            self.operations.stop()
         self.executor.shutdown(wait=True)
         with self.signal_lock, self.search_lock:
             self.signal = None

@@ -18,6 +18,8 @@ Initial release.
   remain separate from disposable caches.
 - Configurable cache roots with project UUID directories, local cache availability,
   and boundary checks for cache writes and cleanup.
+- Project operation reservations that keep status polling responsive during filesystem
+  validation and cleanup while preventing conflicting opens, saves, and deletion.
 - Interactive project setup with sample/fraction assignments for mzML files and
   sample-level identification layers for idXML files. Includes filesystem
   browsing, batch file selection, and input validation.

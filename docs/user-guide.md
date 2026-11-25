@@ -237,7 +237,10 @@ project is closed or the server shuts down.
 A project cache has one server owner at a time; another server can browse its saved
 configuration but cannot prepare the same cache concurrently. Clearing caches leaves
 the durable registry and original input files intact. Cache writes and cleanup reject
-paths or symlinks that redirect outside the expected project directory.
+paths or symlinks that redirect outside the expected project directory. Cleanup and
+source validation run outside the shared runtime state lock, keeping status polling
+responsive. Conflicting requests on the same project are rejected until the current
+operation finishes, after which they can be retried.
 
 Identification files are loaded with pyOpenMS `IdXMLFile` into native protein and peptide identification objects. One complete idXML is held in memory during its import. The reader uses OpenMS run identifiers and source metadata to associate PSMs with acquisitions, then the importer writes the selected fields to SQLite.
 

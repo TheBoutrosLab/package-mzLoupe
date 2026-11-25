@@ -92,3 +92,9 @@ handler methods and an `APIRouter`. Its constructor receives the runtime or asse
 it needs; `register(app)` declares its endpoints and includes the router.
 `mzloupe/app.py` composes these groups and manages application lifetime. Keep
 preparation, signal processing, and storage logic in their existing services.
+
+Project filesystem work must run outside `ProjectRuntime.lock`. Hold that lock only
+for short state transitions and `ProjectOperations` reservation changes. Keep a cache's
+file lease until cleanup and any registry deletion finish; release reservations on
+both success and failure. Concurrency tests pause filesystem work with events and
+check that status and unrelated-project inspection can still complete.

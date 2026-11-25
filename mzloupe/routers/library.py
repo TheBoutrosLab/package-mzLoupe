@@ -87,8 +87,7 @@ class LibraryRoutes:
 
     def save(self, project: ProjectInput) -> dict[str, Any]:
         """Create or update a saved project, allowing empty drafts and missing source files."""
-        project.resolve_paths(Path.cwd(), validate_files=False)
-        return self.runtime.library_record(self.runtime.registry.save(project))
+        return self.runtime.library_record(self.runtime.save_configuration(project))
 
     def project(self, identifier: str) -> dict[str, Any]:
         """Read a saved configuration immediately, without preparing it."""
@@ -96,10 +95,7 @@ class LibraryRoutes:
 
     def open_project(self, identifier: str) -> dict[str, bool]:
         """Prepare or reuse the selected project's current saved definition."""
-        configuration = ProjectInput.model_validate(
-            self.runtime.registry.get(identifier)["configuration"]
-        )
-        self.runtime.open_configuration(configuration)
+        self.runtime.open_project(identifier)
         return {"accepted": True}
 
     def close_project(self, identifier: str) -> dict[str, bool]:
@@ -123,8 +119,7 @@ class LibraryRoutes:
 
     def delete(self, identifier: str) -> dict[str, bool]:
         """Remove an inactive project's saved definition and cache, preserving original inputs."""
-        self.runtime.clear_cache(identifier)
-        self.runtime.registry.delete(identifier)
+        self.runtime.delete_project(identifier)
         return {"deleted": True}
 
     def plan(self, project: ProjectInput) -> dict[str, int]:
