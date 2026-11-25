@@ -1,7 +1,12 @@
 """Prepare sources sequentially and publish the entire project atomically."""
 
 from collections.abc import Callable
+import errno
 from pathlib import Path
+import json
+import os
+import shutil
+import sqlite3
 
 import numpy as np
 import pyopenms as oms
@@ -9,6 +14,7 @@ import pyopenms as oms
 from mzloupe.models import AcquisitionInput, ProjectInput
 from mzloupe.readers.mzml import MzMLReader
 from mzloupe.services.identifications import IdentificationImporter
+from mzloupe.services.project_cache import ProjectCache
 from mzloupe.storage.catalog import ProjectCatalog
 
 
@@ -23,16 +29,129 @@ class ProjectPreparer:
         self,
         project: ProjectInput,
         progress: Callable[[str, float], None],
+        previous: Path | None = None,
+        description: dict | None = None,
     ) -> ProjectCatalog:
-        """Prepare fractions sequentially, then resolve sample-level identifications."""
-        catalog = ProjectCatalog(self.workspace / "catalog.sqlite")
-        catalog.create()
-        for number, acquisition in enumerate(project.acquisitions):
-            progress(f"Indexing {acquisition.fraction}", number / len(project.acquisitions))
-            self.acquisition(catalog, acquisition)
+        """Reuse unchanged acquisitions and reimport only affected sample/layer inputs."""
+        state = description or ProjectCache.inputs(project)
+        old = ProjectCache.description(previous)
+        catalog = self.copy_catalog(previous)
+        self.update_acquisitions(
+            catalog, project, progress=progress, previous=previous, state=state, old=old
+        )
         progress("Resolving sample identification files", 0.95)
-        IdentificationImporter(catalog, project).import_sources()
+        self.update_identifications(catalog, project, state, old)
         return catalog
+
+    def copy_catalog(self, previous: Path | None) -> ProjectCatalog:
+        """Stage compact metadata while preserving the previous reader's snapshot."""
+        catalog = ProjectCatalog(self.workspace / "catalog.sqlite")
+        if previous is None:
+            catalog.create()
+        else:
+            with sqlite3.connect(previous / "catalog.sqlite") as source:
+                with catalog.connect() as destination:
+                    source.backup(destination)
+        return catalog
+
+    def update_acquisitions(
+        self,
+        catalog: ProjectCatalog,
+        project: ProjectInput,
+        *,
+        progress: Callable[[str, float], None],
+        previous: Path | None,
+        state: dict,
+        old: dict,
+    ) -> None:
+        """Reuse unchanged signal artifacts and index only added or replaced acquisitions."""
+        retained = {item.id for item in project.acquisitions}
+        with catalog.connect() as connection:
+            for row in connection.execute("SELECT id FROM acquisitions").fetchall():
+                if row["id"] not in retained:
+                    connection.execute("DELETE FROM scans WHERE source=?", (row["id"],))
+                    connection.execute("DELETE FROM acquisitions WHERE id=?", (row["id"],))
+            connection.execute("DELETE FROM layers")
+        for number, acquisition in enumerate(project.acquisitions):
+            unchanged = (
+                old.get("acquisitions", {}).get(acquisition.id)
+                == state["acquisitions"][acquisition.id]
+            )
+            if unchanged and previous is not None:
+                progress(f"Reusing {acquisition.fraction}", number / len(project.acquisitions))
+                if self.reuse(catalog, acquisition, previous):
+                    continue
+            # Missing catalog headers make reuse impossible even when the file is unchanged.
+            progress(f"Indexing {acquisition.fraction}", number / len(project.acquisitions))
+            with catalog.connect() as connection:
+                connection.execute("DELETE FROM scans WHERE source=?", (acquisition.id,))
+                connection.execute("DELETE FROM acquisitions WHERE id=?", (acquisition.id,))
+            self.acquisition(catalog, acquisition)
+
+    @staticmethod
+    def update_identifications(
+        catalog: ProjectCatalog, project: ProjectInput, state: dict, old: dict
+    ) -> None:
+        """Re-resolve changed sample scopes without duplicating unaffected PSM imports."""
+        importer = IdentificationImporter(catalog, project)
+        for key in old.get("identifications", {}):
+            if old["identifications"][key] != state["identifications"].get(key):
+                sample, layer, path = json.loads(key)
+                with catalog.connect() as connection:
+                    connection.execute(
+                        "DELETE FROM psms WHERE sample=? AND layer=? AND source_path=?",
+                        (sample, layer, path),
+                    )
+        for (sample, layer, path), sources in project.identification_sources().items():
+            key = json.dumps([sample, layer, path])
+            if old.get("identifications", {}).get(key) != state["identifications"][key]:
+                importer.import_source(sample=sample, layer=layer, path=path, source_ids=sources)
+            else:
+                with catalog.connect() as connection:
+                    importer.register_layers(connection=connection, source_ids=sources, layer=layer)
+
+    def reuse(self, catalog: ProjectCatalog, acquisition: AcquisitionInput, previous: Path) -> bool:
+        """Carry prepared artifacts forward, or return False when catalog headers are missing.
+
+        Check the catalog before creating files so the caller can safely re-index
+        this acquisition without overwriting a hard-linked artifact from the old revision.
+        """
+        rows = catalog.rows("SELECT path FROM acquisitions WHERE id=?", (acquisition.id,))
+        if not rows:
+            return False
+        path = rows[0]["path"]
+        for suffix in (".npz", ".mzML"):
+            source = previous / (acquisition.id + suffix)
+            if source.is_file():
+                self.link_or_copy(source, self.workspace / source.name)
+        if Path(path).parent == previous:
+            path = str(self.workspace / Path(path).name)
+        with catalog.connect() as connection:
+            connection.execute(
+                "UPDATE acquisitions SET sample=?, fraction=?, path=? WHERE id=?",
+                (acquisition.sample, acquisition.fraction, path, acquisition.id),
+            )
+        return True
+
+    @staticmethod
+    def link_or_copy(source: Path, destination: Path) -> None:
+        """Share an immutable artifact when possible; copy it if hard links are unavailable.
+
+        Keep unrelated errors visible, including missing files, existing destinations,
+        I/O failures, and exhausted storage. A failed fallback copy also propagates.
+        """
+        try:
+            os.link(source, destination)
+        except OSError as error:
+            if error.errno not in {
+                errno.EXDEV,
+                errno.ENOTSUP,
+                errno.EOPNOTSUPP,
+                errno.ENOSYS,
+                errno.EPERM,
+            }:
+                raise
+            shutil.copy2(source, destination)
 
     def acquisition(self, catalog: ProjectCatalog, acquisition: AcquisitionInput) -> None:
         """Store scan metadata and a fixed-size MS1 map without retaining all peaks."""

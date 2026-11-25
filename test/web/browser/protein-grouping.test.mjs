@@ -130,6 +130,10 @@ test("Protein grouping supports collection choices, scopes, and ambiguous assign
     // Fulfill every request locally: no listening port, raw-data access, or server.
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (url.pathname === "/api/library") return route.fulfill({ json: [] });
+      if (url.pathname === "/api/preparation-plan")
+        return route.fulfill({ json: { added: 0, changed: 0, reused: 2 } });
+
       if (url.origin !== origin) return route.abort();
       if (!url.pathname.startsWith("/api/")) {
         const filename = path.join(
@@ -289,7 +293,7 @@ test("Protein grouping supports collection choices, scopes, and ambiguous assign
     await panel.screenshot({
       path: BrowserArtifacts.path("mzloupe-grouping-inputs.png")
     });
-    await page.getByRole("button", { name: "Apply changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save and explore", exact: true }).click();
     await expect.poll(() => applied?.protein_groupings?.length).toBe(3);
     assert.deepEqual(applied.protein_groupings[2], {
       name: "Custom grouping",

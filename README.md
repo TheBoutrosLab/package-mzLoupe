@@ -29,8 +29,8 @@ npm --prefix web run build
 python -m pip install -e .
 ```
 
-Run `mzloupe serve`, open http://127.0.0.1:8765, and add your files in
-**Project setup**. mzML alone works; idXML adds identification evidence.
+Run `mzloupe serve`, open http://127.0.0.1:8765, and choose **New project** or open
+a saved project from **Projects**. mzML alone works; idXML adds identification evidence.
 
 ## Learn more
 

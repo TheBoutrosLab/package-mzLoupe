@@ -51,8 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help=(
             "Project JSON file to open at startup. Paths inside it are relative "
-            "to the JSON file. Omit this option to select mzML and idXML files "
-            "in the dashboard's Project setup view."
+            "to the JSON file. Omit this option to browse saved projects or create "
+            "a new project in the dashboard."
         ),
     )
     serve_parser.add_argument(
@@ -61,9 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIRECTORY",
         help=(
             "Directory for scan indexes, acquisition maps, and prepared mzML "
-            "working copies. Reuses matching prepared projects between sessions "
+            "working copies. Uses this root for every project and reuses unchanged inputs "
             "(default: ~/.cache/mzloupe)."
         ),
+    )
+    serve_parser.add_argument(
+        "--registry",
+        type=Path,
+        metavar="FILE",
+        help="Project library database (default: ~/.local/share/mzloupe/projects.sqlite).",
     )
     serve_parser.add_argument(
         "--port",
@@ -98,13 +104,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def serve_dashboard(*, project_path: Path | None, cache_directory: Path | None, port: int) -> None:
+def serve_dashboard(
+    *,
+    project_path: Path | None,
+    cache_directory: Path | None,
+    port: int,
+    registry_path: Path | None = None,
+) -> None:
     """Run the loopback-only server until interrupted with Ctrl+C."""
     import uvicorn
 
     from mzloupe.app import create_app
 
-    app = create_app(cache=cache_directory, project_path=project_path)
+    app = create_app(cache=cache_directory, project_path=project_path, registry=registry_path)
     uvicorn.run(app, host="127.0.0.1", port=port)
 
 
@@ -126,6 +138,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             project_path=arguments.project,
             cache_directory=arguments.cache,
             port=arguments.port,
+            registry_path=arguments.registry,
         )
     elif arguments.command == "demo":
         write_demo(arguments.directory)

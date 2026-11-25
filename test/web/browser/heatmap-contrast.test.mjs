@@ -12,7 +12,7 @@ test("Heatmap contrast preserves data and supports automatic, full, and custom l
   const { chromium, expect } = require("@playwright/test");
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const assets = path.join(root, "mzloupe/static");
-  const origin = "http://mzloupe.test";
+  const origin = "https://mzloupe.test";
   const fixture = process.env.MZLOUPE_MAP_FIXTURE;
   const original = fixture
     ? JSON.parse(await readFile(fixture, "utf8"))
@@ -72,6 +72,10 @@ test("Heatmap contrast preserves data and supports automatic, full, and custom l
     await page.route("**/*", async (route) => {
       const request = route.request();
       const url = new URL(request.url());
+      if (url.pathname === "/api/library") return route.fulfill({ json: [] });
+      if (url.pathname === "/api/preparation-plan")
+        return route.fulfill({ json: { added: 0, changed: 0, reused: 2 } });
+
       if (url.origin !== origin) {
         return route.abort();
       }

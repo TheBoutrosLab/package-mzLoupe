@@ -2,6 +2,7 @@
 
 [Back to mzLoupe](../README.md) · [Installation](../README.md#install-from-github)
 
+- [Project library](#project-library)
 - [Project setup](#project-setup-in-the-dashboard)
 - [Project JSON and input files](#your-data)
 - [Protein grouping](#protein-grouping)
@@ -10,9 +11,31 @@
 - [Precursor m/z](#precursor-mz)
 - [Preparation, memory, and caching](#memory-and-preparation)
 
+## Project library
+
+Start `mzloupe serve` to open **Projects**, the saved project library for the account
+running mzLoupe. Search by name, reopen an existing project, or choose **New project**
+or **Import JSON**. Projects remain available after restarting mzLoupe or clearing
+prepared caches. A command-line `--project FILE` opens that project directly.
+
+Each project has a permanent UUID. Renaming it, adding fractions, changing
+identification layers, or saving edits keeps the same identity. **Duplicate** creates
+an independent project with a new ID. The row menu also provides **Edit**, **Export
+JSON**, **Archive**, **Clear cache**, and **Delete project**. Archived projects remain
+available through **Include archived**. Clearing a cache preserves the project;
+deleting a project removes its saved definition and its cache under the current root.
+Original input files and caches under other roots are kept. Choose **Close project**
+from the active project's menu before clearing its cache or deleting it; restarting mzLoupe is not necessary.
+
+The library stores metadata in `~/.local/share/mzloupe/projects.sqlite`, outside the
+cache directory. Use `--registry /path/to/projects.sqlite` to select another registry.
+Library rows check cache availability under the current cache root; opening a project
+also rechecks its input files. **Edit** loads only the saved configuration, without
+preparing mzML.
+
 ## Project setup in the dashboard
 
-Start `mzloupe serve` to build a project interactively. Choose **Project setup** to edit acquisition, identification, and optional protein grouping tables.
+Choose **New project**, or **Edit** from an existing project's menu, to open **Project setup**. The project selector switches between saved projects; **Projects** returns to the library.
 
 - **Acquisitions** assigns each mzML path to a sample and fraction.
 - **Identifications** assigns each sample-level idXML path to a sample and named layer.
@@ -23,22 +46,30 @@ Start `mzloupe serve` to build a project interactively. Choose **Project setup**
 
 Use **Add mzML files** or **Add idXML files** to browse the filesystem of the machine running mzLoupe. Select multiple files and give them a common sample. You can also add empty rows and paste paths directly into cells. Sample names have autocomplete. **Show sample** filters both tables.
 
-Errors appear beside the relevant fields. **Open project** or **Apply changes** becomes available after row assignments and source paths pass validation. Applying starts preparation. Switching between **Project setup** and **Explore** preserves the current inspection while edits are staged.
+Errors appear beside the relevant fields. **Save project** or **Save changes** stores
+the configuration without preparing data. Empty projects can be saved as drafts, and
+missing source files can be corrected later. **Save and explore** saves the project,
+prepares only the affected inputs, and opens **Explore**. A preview reports added,
+changed, and reused acquisitions. **Project details** shows creation/modification
+dates and the project's cache directory.
 
-**Import JSON** populates the tables for review. **Save JSON** opens an in-app server
-directory and filename chooser and saves the current draft on the machine running
-mzLoupe. Use **Browse directory** to navigate that machine's filesystem;
-`~` refers to the server user's home directory. Existing files require an explicit
-**Replace file** action. The dialog reports the resolved server path after saving.
-Saving preserves acquisition IDs and sample/layer associations, writes absolute
-source paths so the manifest works from its new location, and does not activate
-the draft or reprepare data. There is no browser-download action. Both import and
-save use the same project model as the CLI. Compiled dashboard assets are included
-in the installed wheel.
+Switching between **Projects**, **Project setup**, and **Explore** preserves staged
+edits. Switching to another project or creating a new one asks before discarding
+unsaved changes. During an update, the previous prepared revision remains available
+and is labeled clearly; failed preparation does not replace its data. Project-scoped
+browser URLs restore the saved project and selected spectrum.
+
+**Import JSON** populates the tables for review. Importing into an existing editor
+updates that project's configuration. **Export JSON** opens a directory and filename
+chooser on the machine running mzLoupe. Use **Browse directory** to navigate;
+`~` refers to that account's home directory. Existing files require **Replace file**.
+Exports preserve the project UUID, acquisition IDs, and sample/layer associations,
+using absolute source paths. Exporting does not prepare data. There is no browser
+download action.
 
 ## Your data
 
-Create a project JSON. Paths resolve relative to its location. IDs use letters, digits, underscores, or hyphens.
+Project JSON remains available for programmatic import and export. Paths resolve relative to its location. Acquisition IDs use letters, digits, underscores, or hyphens. An optional top-level `id` is the project UUID; exports include it so moved or regenerated manifests retain their identity. Command-line manifests without an ID are registered once by their import path. For dashboard imports without an ID, use an existing project's editor to update it, or import from the library to create a new project.
 
 ```json
 {
@@ -181,7 +212,35 @@ full stored value, with missing values sorted last.
 
 ## Memory and preparation
 
-Peak arrays are read one spectrum at a time. pyOpenMS retains scan metadata for the active reader. Preparation performs two sequential passes to determine map bounds and populate the catalog and fixed-size map. It runs in a background worker while the UI reports progress. Signal operations are serialized to bound simultaneous readers. Completed preparation is reused when the project mapping and all source paths, sizes, and modification times match. This fingerprint detects routine source changes, and does not perform a full content checksum. Use `--cache /path/to/cache` to choose its location. Remove old project directories there while the server is stopped to reclaim disk space.
+Peak arrays are read one spectrum at a time. pyOpenMS retains scan metadata for the
+active reader. Initial preparation reads MS1 signal for map bounds and intensities,
+and runs in a background worker while the UI reports progress. Signal operations
+are serialized to bound simultaneous readers.
+
+Each project has a stable directory under `~/.cache/mzloupe/projects/<project-id>/`.
+Use `--cache /path/to/cache` to select the root for every project in that server.
+Cache paths are derived from this root and the project UUID, rather than stored in
+the registry. Changing the root uses an existing valid cache there or prepares a new
+one; caches under the previous root are neither moved nor deleted. Readiness is
+checked from the selected root's cache manifests, so a shared registry cannot make
+an absent cache appear ready. File paths, sizes, modification times, and processing
+format determine which inputs need preparation, without full content checksums.
+Adding a fraction prepares only that acquisition and re-resolves the affected sample's identifications. Changing an idXML reimports only the affected
+layer; renaming a project or changing grouping does not reread mzML.
+
+Updates stage complete metadata snapshots inside the same project directory before
+publishing them. Unchanged maps and indexed working copies use hard links to share
+disk storage where supported, or metadata-preserving copies when hard links are
+unavailable. An acquisition with missing catalog headers is re-indexed.
+Superseded snapshots are collected after the server finishes its readers when the
+project is closed or the server shuts down.
+A project cache has one server owner at a time; another server can browse its saved
+configuration but cannot prepare the same cache concurrently. Clearing caches leaves
+the durable registry and original input files intact. Cache writes and cleanup reject
+paths or symlinks that redirect outside the expected project directory. Cleanup and
+source validation run outside the shared runtime state lock, keeping status polling
+responsive. Conflicting requests on the same project are rejected until the current
+operation finishes, after which they can be retried.
 
 Identification files are loaded with pyOpenMS `IdXMLFile` into native protein and peptide identification objects. One complete idXML is held in memory during its import. The reader uses OpenMS run identifiers and source metadata to associate PSMs with acquisitions, then the importer writes the selected fields to SQLite.
 

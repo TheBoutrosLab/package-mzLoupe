@@ -232,7 +232,7 @@ def test_gzip_working_copy_and_reused_cache(tmp_path: Path) -> None:
             assert spectrum["native"] == "scan=80"
             assert len(spectrum["masses"]) > 5
     assert tokens[0] == tokens[1]
-    assert list(cache.glob("project-*/*.mzML"))
+    assert list(cache.glob("projects/*/revision-*/*.mzML"))
 
 
 def test_psm_fraction_scope(session: InspectionSession) -> None:
@@ -307,7 +307,7 @@ def test_psm_api_exposes_only_column_filters(session: InspectionSession) -> None
 def test_cache_format_change_rebuilds_instead_of_migrating(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A new cache version creates a fresh catalog and leaves prior files intact."""
+    """A format change rebuilds derived state inside the same stable project cache."""
     from mzloupe.app import ProjectRuntime
 
     manifest = DemoProject().write(tmp_path / "data")
@@ -329,4 +329,6 @@ def test_cache_format_change_rebuilds_instead_of_migrating(
             ).json()["rows"]
             assert rows and all(row["protein_accessions"] == [] for row in rows)
     assert tokens[0] != tokens[1]
-    assert all((cache / token / "catalog.sqlite").is_file() for token in tokens)
+    roots = [path for path in (cache / "projects").iterdir() if path.is_dir()]
+    assert len(roots) == 1
+    assert len(list(roots[0].glob("revision-*/catalog.sqlite"))) == 1

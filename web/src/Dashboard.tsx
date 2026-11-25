@@ -8,10 +8,16 @@ import { PsmTable } from "./PsmTable";
 import { useExplorer } from "./useExplorer";
 
 /** Compose linked evidence views around typed explorer transitions. */
-export function Dashboard({ status }: { status: ProjectStatus }) {
+export function Dashboard({
+  status,
+  visible = true
+}: {
+  status: ProjectStatus;
+  visible?: boolean;
+}) {
   const [overview, setOverview] = useState(true);
   const [fragmentPpm, setFragmentPpm] = useState<number | string>(20);
-  const explorer = useExplorer(status, fragmentPpm);
+  const explorer = useExplorer(status, fragmentPpm, visible);
   const {
     state,
     base,

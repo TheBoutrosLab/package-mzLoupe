@@ -53,6 +53,10 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
     await page.route("**/*", async (route) => {
       const request = route.request();
       const url = new URL(request.url());
+      if (url.pathname === "/api/library") return route.fulfill({ json: [] });
+      if (url.pathname === "/api/preparation-plan")
+        return route.fulfill({ json: { added: 0, changed: 0, reused: 2 } });
+
       if (url.origin !== origin) {
         return route.abort();
       }
@@ -132,7 +136,7 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
     await expect(
       page.getByRole("button", { name: "Download JSON", exact: true })
     ).toHaveCount(0);
-    await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Save project JSON", exact: true });
     await expect(dialog).toBeVisible();
     await expect(
@@ -187,7 +191,7 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
     await page
       .getByLabel("Project name", { exact: true })
       .fill("Updated remote analysis");
-    await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Replace file", exact: true })
@@ -196,7 +200,7 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Replace file", exact: true })
@@ -209,7 +213,7 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
     assert.equal(saves.at(-1).overwrite, false);
     assert.equal(serverFiles.get("/scratch/projects/session.json"), original);
 
-    await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     await page.getByLabel("File name", { exact: true }).fill("session.json");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await page.getByRole("button", { name: "Replace file", exact: true }).click();
@@ -222,7 +226,7 @@ test("Project saving handles remote paths, overwrites, and permission errors", a
       "Updated remote analysis"
     );
 
-    await page.getByRole("button", { name: "Save JSON", exact: true }).click();
+    await page.getByRole("button", { name: "Export JSON", exact: true }).click();
     await dialog.getByLabel("Directory", { exact: true }).fill("/denied");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).toContainText("Permission denied on server");

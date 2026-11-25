@@ -8,7 +8,7 @@ import {
   Select,
   TextInput
 } from "@mantine/core";
-import { apiClient, ProjectConfiguration } from "./api";
+import { apiClient, ProjectConfiguration, PreparationPlan, LibraryProject } from "./api";
 import { useApiRequest } from "./useApiRequest";
 import { ProjectDraft, RowIssue } from "./ProjectDraft";
 import { AcquisitionTable, IdentificationTable } from "./SourceTables";
@@ -34,6 +34,10 @@ interface Props {
   draft: ProjectDraft;
   onChange: (draft: ProjectDraft) => void;
   onApply: (configuration: ProjectConfiguration) => Promise<void>;
+  onSave: (configuration: ProjectConfiguration) => Promise<void>;
+  saving: boolean;
+  importRequest: number;
+  project?: LibraryProject;
   hasProject: boolean;
   preparing: boolean;
 }
@@ -49,7 +53,17 @@ interface Picker {
 /**
  * Stage and validate file associations before explicitly activating a project.
  */
-export function ProjectSetup({ draft, onChange, onApply, hasProject, preparing }: Props) {
+export function ProjectSetup({
+  draft,
+  onChange,
+  onApply,
+  onSave,
+  hasProject,
+  preparing,
+  saving,
+  importRequest,
+  project
+}: Props) {
   const [sample, setSample] = useState("");
   const [assignSample, setAssignSample] = useState("Sample 1");
   const [assignLayer, setAssignLayer] = useState("Validated");
@@ -62,8 +76,56 @@ export function ProjectSetup({ draft, onChange, onApply, hasProject, preparing }
   const [serverIssues, setServerIssues] = useState<RowIssue[]>([]);
   const [validating, setValidating] = useState(true);
   const [applying, setApplying] = useState(false);
+  const [plan, setPlan] = useState<PreparationPlan>();
   const localIssues = draft.issues();
+  const { run: loadPlan, cancel: cancelPlan } = useApiRequest();
   const { run: validateDraft, cancel: cancelValidation } = useApiRequest();
+
+  // Library imports use this same editor rather than a separate project creation flow.
+  useEffect(() => {
+    if (importRequest) setImportOpen(true);
+  }, [importRequest]);
+
+  // Preview input reuse only after source validation and only for registered projects.
+  useEffect(() => {
+    setPlan(undefined);
+    if (!hasProject || validating || localIssues.length || serverIssues.length) return;
+    const timer = setTimeout(
+      () =>
+        loadPlan<PreparationPlan>({
+          url: "/api/preparation-plan",
+          options: {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(draft.toConfiguration())
+          },
+          onSuccess: setPlan
+        }),
+      250
+    );
+    return () => {
+      clearTimeout(timer);
+      cancelPlan();
+    };
+  }, [
+    draft,
+    hasProject,
+    validating,
+    serverIssues.length,
+    localIssues.length,
+    loadPlan,
+    cancelPlan
+  ]);
+
+  /** Save a draft independently of expensive scientific preparation. */
+  async function saveProject() {
+    setError("");
+    try {
+      await onSave(draft.toConfiguration());
+    } catch (failure) {
+      setError((failure as Error).message);
+    }
+  }
 
   // Check local row rules first, then debounce filesystem validation on the
   // server.
@@ -132,6 +194,7 @@ export function ProjectSetup({ draft, onChange, onApply, hasProject, preparing }
           body: JSON.stringify({ path })
         }
       );
+      configuration.id = hasProject ? draft.id : configuration.id || draft.id;
       onChange(ProjectDraft.fromConfiguration(configuration));
       setSample("");
       setError("");
@@ -232,10 +295,12 @@ export function ProjectSetup({ draft, onChange, onApply, hasProject, preparing }
           </Button>
           <Button
             variant="default"
-            disabled={!!localIssues.length}
+            disabled={
+              !!localIssues.filter((issue) => issue.field !== "acquisitions").length
+            }
             onClick={() => setSaveOpen(true)}
           >
-            Save JSON
+            Export JSON
           </Button>
         </Group>
       </div>
@@ -257,133 +322,170 @@ export function ProjectSetup({ draft, onChange, onApply, hasProject, preparing }
           Saved: {savedPath}
         </Alert>
       )}
-      <div className="setup-controls">
-        <TextInput
-          label="Project name"
-          value={draft.name}
-          error={
-            issues.find((issue) => issue.id === "project" && issue.field === "name")
-              ?.message
-          }
-          onChange={(event) => onChange(draft.withName(event.currentTarget.value))}
+      {project && (
+        <details className="project-details">
+          <summary>Project details</summary>
+          <dl>
+            <dt>Created</dt>
+            <dd>{new Date(project.created_at).toLocaleString()}</dd>
+            <dt>Modified</dt>
+            <dd>{new Date(project.modified_at).toLocaleString()}</dd>
+            <dt>Cache directory</dt>
+            <dd>{project.cache_directory}</dd>
+          </dl>
+        </details>
+      )}
+      <fieldset
+        className="setup-fields"
+        disabled={saving || applying || preparing}
+      >
+        <div className="setup-controls">
+          <TextInput
+            label="Project name"
+            value={draft.name}
+            error={
+              issues.find((issue) => issue.id === "project" && issue.field === "name")
+                ?.message
+            }
+            onChange={(event) => onChange(draft.withName(event.currentTarget.value))}
+          />
+          <Select
+            label="Show sample"
+            value={sample}
+            data={[
+              {
+                value: "",
+                label: "All samples"
+              },
+              ...draft.sampleNames().map((name) => ({
+                value: name,
+                label: name
+              }))
+            ]}
+            onChange={(value) => setSample(value || "")}
+          />
+        </div>
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Acquisitions</h2>
+            <Group>
+              <Button
+                variant="subtle"
+                onClick={() =>
+                  onChange(
+                    draft.addAcquisitions(
+                      [""],
+                      sample || draft.sampleNames()[0] || "Sample 1"
+                    )
+                  )
+                }
+              >
+                Add acquisition row
+              </Button>
+              <Button onClick={() => addFiles("mzml")}>Add mzML files</Button>
+            </Group>
+          </div>
+          <AcquisitionTable
+            draft={draft}
+            sample={sample}
+            issues={issues}
+            onChange={changeDraft}
+            onBrowse={(row) =>
+              setPicker({
+                kind: "mzml",
+                row
+              })
+            }
+          />
+        </section>
+        <section className="panel">
+          <div className="panel-title">
+            <h2>Identifications</h2>
+            <Group>
+              <Button
+                variant="subtle"
+                onClick={() =>
+                  onChange(
+                    draft.addIdentifications(
+                      [""],
+                      sample || draft.sampleNames()[0] || "Sample 1",
+                      "Validated"
+                    )
+                  )
+                }
+              >
+                Add identification row
+              </Button>
+              <Button onClick={() => addFiles("idxml")}>Add idXML files</Button>
+            </Group>
+          </div>
+          <IdentificationTable
+            draft={draft}
+            sample={sample}
+            issues={issues}
+            onChange={changeDraft}
+            onBrowse={(row) =>
+              setPicker({
+                kind: "idxml",
+                row
+              })
+            }
+          />
+        </section>
+        <ProteinGroupingTable
+          draft={draft}
+          issues={issues}
+          onChange={onChange}
         />
-        <Select
-          label="Show sample"
-          value={sample}
-          data={[
-            {
-              value: "",
-              label: "All samples"
-            },
-            ...draft.sampleNames().map((name) => ({
-              value: name,
-              label: name
-            }))
-          ]}
-          onChange={(value) => setSample(value || "")}
-        />
-      </div>
-      <section className="panel">
-        <div className="panel-title">
-          <h2>Acquisitions</h2>
+        <div className="setup-footer">
+          <div>
+            <strong>
+              {draft.sampleNames().length}{" "}
+              {draft.sampleNames().length === 1 ? "sample" : "samples"} ·{" "}
+              {draft.acquisitions.length}{" "}
+              {draft.acquisitions.length === 1 ? "acquisition" : "acquisitions"} ·{" "}
+              {draft.identifications.length}{" "}
+              {draft.identifications.length === 1
+                ? "identification file"
+                : "identification files"}
+            </strong>
+            <span>
+              {validating
+                ? "Checking files…"
+                : issues.length
+                  ? "Review the highlighted fields before opening the project."
+                  : "Source paths checked. Ready to open."}
+            </span>
+          </div>
           <Group>
             <Button
-              variant="subtle"
-              onClick={() =>
-                onChange(
-                  draft.addAcquisitions(
-                    [""],
-                    sample || draft.sampleNames()[0] || "Sample 1"
-                  )
-                )
+              variant="default"
+              loading={saving && !applying}
+              disabled={
+                !!localIssues.filter((issue) => issue.field !== "acquisitions").length ||
+                preparing
               }
+              onClick={saveProject}
             >
-              Add acquisition row
+              {hasProject ? "Save changes" : "Save project"}
             </Button>
-            <Button onClick={() => addFiles("mzml")}>Add mzML files</Button>
-          </Group>
-        </div>
-        <AcquisitionTable
-          draft={draft}
-          sample={sample}
-          issues={issues}
-          onChange={changeDraft}
-          onBrowse={(row) =>
-            setPicker({
-              kind: "mzml",
-              row
-            })
-          }
-        />
-      </section>
-      <section className="panel">
-        <div className="panel-title">
-          <h2>Identifications</h2>
-          <Group>
             <Button
-              variant="subtle"
-              onClick={() =>
-                onChange(
-                  draft.addIdentifications(
-                    [""],
-                    sample || draft.sampleNames()[0] || "Sample 1",
-                    "Validated"
-                  )
-                )
-              }
+              size="md"
+              loading={applying || preparing}
+              disabled={!!issues.length || validating || !!error}
+              onClick={apply}
             >
-              Add identification row
+              Save and explore
             </Button>
-            <Button onClick={() => addFiles("idxml")}>Add idXML files</Button>
           </Group>
         </div>
-        <IdentificationTable
-          draft={draft}
-          sample={sample}
-          issues={issues}
-          onChange={changeDraft}
-          onBrowse={(row) =>
-            setPicker({
-              kind: "idxml",
-              row
-            })
-          }
-        />
-      </section>
-      <ProteinGroupingTable
-        draft={draft}
-        issues={issues}
-        onChange={onChange}
-      />
-      <div className="setup-footer">
-        <div>
-          <strong>
-            {draft.sampleNames().length}{" "}
-            {draft.sampleNames().length === 1 ? "sample" : "samples"} ·{" "}
-            {draft.acquisitions.length}{" "}
-            {draft.acquisitions.length === 1 ? "acquisition" : "acquisitions"} ·{" "}
-            {draft.identifications.length}{" "}
-            {draft.identifications.length === 1
-              ? "identification file"
-              : "identification files"}
-          </strong>
-          <span>
-            {validating
-              ? "Checking files…"
-              : issues.length
-                ? "Review the highlighted fields before opening the project."
-                : "Source paths checked. Ready to open."}
-          </span>
-        </div>
-        <Button
-          size="md"
-          loading={applying || preparing}
-          disabled={!!issues.length || validating || !!error}
-          onClick={apply}
-        >
-          {hasProject ? "Apply changes" : "Open project"}
-        </Button>
-      </div>
+        {plan && (
+          <p className="preparation-plan">
+            {plan.added} acquisitions added · {plan.changed} changed · {plan.reused}{" "}
+            reused
+          </p>
+        )}
+      </fieldset>
       <Modal
         opened={importOpen}
         onClose={() => setImportOpen(false)}

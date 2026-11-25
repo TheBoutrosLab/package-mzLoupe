@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { createInterface } from "node:readline";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { ApiSession } from "../fixtures/ApiSession.mjs";
 import { BrowserArtifacts } from "../browser-artifacts.mjs";
 
 test("PSM table filtering and inspection stay linked to the Python API", async () => {
@@ -15,49 +14,8 @@ test("PSM table filtering and inspection stay linked to the Python API", async (
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const assets = path.join(root, "mzloupe/static");
   const origin = "https://mzloupe.test";
-  const python = process.env.MZLOUPE_TEST_PYTHON || "python3";
-  // This worker runs FastAPI's TestClient in-process and communicates through pipes.
-  // No HTTP server or listening port is started by either process.
-  const worker = spawn(python, [path.join(root, "test/python/psm_browser_api.py")], {
-    cwd: root,
-    env: { ...process.env, PYTHONPATH: root },
-    stdio: ["pipe", "pipe", "pipe"]
-  });
-  let workerError = "";
-  worker.stderr.on("data", (data) => {
-    workerError += data;
-  });
-  const waiting = new Map();
-  let serial = 0;
-  let resolveReady;
-  let rejectReady;
-  const ready = new Promise((resolve, reject) => {
-    resolveReady = resolve;
-    rejectReady = reject;
-  });
-  const exited = new Promise((resolve) => worker.once("close", resolve));
-  const lines = createInterface({ input: worker.stdout });
-  lines.on("line", (line) => {
-    if (line === "MZLOUPE_READY") resolveReady();
-    if (line.startsWith("MZLOUPE_RESPONSE ")) {
-      const response = JSON.parse(line.slice("MZLOUPE_RESPONSE ".length));
-      waiting.get(response.id)?.resolve(response);
-      waiting.delete(response.id);
-    }
-  });
-  worker.on("error", (error) => rejectReady(error));
-  worker.on("exit", (code) => {
-    const error = new Error(`ASGI worker exited (${code}): ${workerError}`);
-    rejectReady(error);
-    for (const item of waiting.values()) item.reject(error);
-  });
-  function api(request) {
-    const id = serial++;
-    return new Promise((resolve, reject) => {
-      waiting.set(id, { resolve, reject });
-      worker.stdin.write(JSON.stringify({ id, ...request }) + "\n");
-    });
-  }
+  const session = new ApiSession("psm_browser_api.py");
+  const api = (request) => session.request(request);
   const mime = {
     ".html": "text/html",
     ".js": "text/javascript",
@@ -66,7 +24,7 @@ test("PSM table filtering and inspection stay linked to the Python API", async (
   };
   let browser;
   try {
-    await ready;
+    await session.ready;
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1800, height: 1200 } });
     const errors = [];
@@ -306,6 +264,10 @@ test("PSM table filtering and inspection stay linked to the Python API", async (
 
     // Restoring the address must preserve both the acquisition and explicit candidate.
     const linked = page.url();
+    assert.equal(
+      new URL(linked).searchParams.get("project"),
+      (await api({ method: "GET", url: "/api/status" })).body.project_id
+    );
     await page.reload();
     await expect(
       page.getByRole("textbox", { name: "Active fraction", exact: true })
@@ -356,10 +318,6 @@ test("PSM table filtering and inspection stay linked to the Python API", async (
     throw error;
   } finally {
     await browser?.close();
-    worker.stdin.end();
-    const timeout = setTimeout(() => worker.kill(), 5000);
-    await exited;
-    clearTimeout(timeout);
-    lines.close();
+    await session.close();
   }
 });

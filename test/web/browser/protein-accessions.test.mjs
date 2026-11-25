@@ -77,6 +77,10 @@ test("Protein accession displays preserve membership and isolate spectrum select
     // All data and assets are fulfilled here; this test starts no HTTP server.
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (url.pathname === "/api/library") return route.fulfill({ json: [] });
+      if (url.pathname === "/api/preparation-plan")
+        return route.fulfill({ json: { added: 0, changed: 0, reused: 2 } });
+
       if (url.origin !== origin) return route.abort();
       if (!url.pathname.startsWith("/api/")) {
         const filename = path.join(
