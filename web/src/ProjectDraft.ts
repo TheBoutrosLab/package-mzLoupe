@@ -95,7 +95,7 @@ export class ProjectDraft {
   /** Update one acquisition field without mutating the current draft. */
   withAcquisition(
     id: string,
-    field: "sample" | "fraction" | "mzml",
+    field: "sample" | "fraction" | "mzml" | "mode",
     value: string
   ): ProjectDraft {
     const rows = this.acquisitions.map((row) =>

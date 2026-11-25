@@ -6,6 +6,7 @@ import { PrecursorChromatogram } from "./PrecursorChromatogram";
 import { SpectrumInspector } from "./SpectrumInspector";
 import { PsmTable } from "./PsmTable";
 import { useExplorer } from "./useExplorer";
+import { useFragmentSelection } from "./useFragmentSelection";
 
 /** Compose linked evidence views around typed explorer transitions. */
 export function Dashboard({
@@ -45,6 +46,11 @@ export function Dashboard({
     candidate,
     annotations
   } = state;
+  const fragmentSelection = useFragmentSelection(
+    `${base}:${source}:${candidate?.id}:${spectrum?.ordinal}`,
+    spectrum,
+    annotations
+  );
   const fractions = project.acquisitions.filter((row) => row.sample === sample);
   const active = fractions.find((row) => row.id === source);
   const layers = [...new Set(project.acquisitions.flatMap((row) => row.layers))];
@@ -161,6 +167,10 @@ export function Dashboard({
                 base={base}
                 source={source}
                 fraction={active?.fraction}
+                mode={active?.mode}
+                annotations={annotations}
+                fragmentPpm={Number(fragmentPpm)}
+                fragmentSelection={fragmentSelection}
                 layer={layer}
                 map={map}
                 spectrum={spectrum}
@@ -179,6 +189,7 @@ export function Dashboard({
               candidate={candidate}
               annotations={annotations}
               fragmentPpm={fragmentPpm}
+              fragmentSelection={fragmentSelection}
               setFragmentPpm={setFragmentPpm}
               setCandidate={selectCandidate}
             />

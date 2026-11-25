@@ -1,4 +1,4 @@
-import { Autocomplete, Button, Table, TextInput } from "@mantine/core";
+import { Autocomplete, Button, Select, Table, TextInput } from "@mantine/core";
 import { ProjectDraft, RowIssue } from "./ProjectDraft";
 
 interface Props {
@@ -24,6 +24,7 @@ export function AcquisitionTable({ draft, sample, issues, onChange, onBrowse }: 
           <Table.Tr>
             <Table.Th>Sample</Table.Th>
             <Table.Th>Fraction</Table.Th>
+            <Table.Th w={160}>Acquisition mode</Table.Th>
             <Table.Th>mzML file</Table.Th>
             <Table.Th />
           </Table.Tr>
@@ -59,6 +60,16 @@ export function AcquisitionTable({ draft, sample, issues, onChange, onBrowse }: 
                     onChange(
                       draft.withAcquisition(row.id, "fraction", event.currentTarget.value)
                     )
+                  }
+                />
+              </Table.Td>
+              <Table.Td>
+                <Select
+                  aria-label={"Acquisition mode for " + row.id}
+                  data={["Unknown", "DDA", "DIA"]}
+                  value={row.mode || "Unknown"}
+                  onChange={(value) =>
+                    onChange(draft.withAcquisition(row.id, "mode", value || "Unknown"))
                   }
                 />
               </Table.Td>

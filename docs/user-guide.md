@@ -261,3 +261,59 @@ extraction are released after each scan; the complete raw experiment is never
 retained in memory. A new target or RT interval still needs its relevant MS1 scans.
 
 For unindexed or gzip-compressed mzML, preparation streams an indexed working copy into the cache. The original stays intact. Budget disk space for that working copy. Wide XIC requests can still take time because the relevant spectra must be decoded.
+
+## DIA fragment chromatograms
+
+Set **Acquisition mode** to **DIA** for each applicable mzML in project setup.
+The default **Unknown** leaves fragment extraction disabled, as does **DDA**.
+The JSON field is `"mode": "DIA"` within each acquisition. Changing mode updates
+catalog metadata and reuses prepared signal artifacts.
+
+Select a resolved PSM and click **Show fragment XICs** in the precursor chromatogram.
+The existing singly charged b/y annotations supply all peptide-matched fragment
+ions, including modification masses. Extraction uses their theoretical m/z and
+the inspector's **Fragment tolerance (ppm)**. The precursor trace retains its
+separate MS1 tolerance. The **Fragment ions** table below the spectrum controls
+which traces are shown. The strongest six matched ions by selected-spectrum
+intensity are selected initially; use **Top 6**, **All matched**, **Clear**, or the
+individual XIC checkboxes to change that selection. Ranking by intensity is a
+starting point and does not establish that a transition is free of interference.
+
+The table shows ion label, charge, theoretical m/z, signed mass error in ppm, and
+raw intensity from the selected MS2 spectrum. Ion labels include the series and
+position, such as `y5+`. It does not repeat observed m/z or relative intensity.
+A dagger flags measured peaks assigned to more than one theoretical ion. Hover
+for the assignment count. DDA and Unknown acquisitions retain this inspection
+table without the DIA XIC checkboxes or selection presets.
+
+Click column headers to sort; the Ion and Charge columns also have filters.
+Sorting and filtering preserve the selected traces, including those whose rows
+are filtered out. Colors are generated from ion identity and stay consistent
+across the table, spectrum annotations, and XICs, without cycling after ten ions.
+Click an ion label, an annotated spectrum marker, or a fragment chromatogram to
+highlight that ion across views; click it again to clear the highlight. Hiding,
+selecting, and highlighting fragments do not reread spectra. Extraction batches
+all matched targets so additional traces are available from the current result.
+
+**Raw intensity** is the default and shows measured values. **Relative intensity**
+scales each trace, including MS1, to its own maximum of 100%. These display controls
+do not reread spectra. A matching fragment mass alone does not establish that a signal belongs
+to the peptide; compare co-elution and the supporting spectrum.
+
+Extraction reads each eligible MS2 spectrum once for all fragments. Only scans
+whose isolation window contains the peptide precursor contribute points; a matching
+mass in another window is excluded. An eligible scan with no matching peak contributes
+zero. Fragment traces use the visible RT interval within the extracted MS1 range;
+zooming refreshes them while enabled. New PSM selections require activation again.
+Pending requests are cancelled when their selection or interval changes.
+
+This initial implementation expects original conventional DIA acquisition scans in
+the loaded mzML, with one fixed isolation window covering the selected precursor.
+Missing window metadata and overlapping/staggered windows give an explicit error.
+Reconstructed pseudo-MS/MS files, AIF, and diaPASEF are outside this initial scope.
+An empty RT interval reports that no eligible scans are available.
+
+The catalog stores acquisition mode and absolute lower/upper isolation bounds,
+calculated from the mzML precursor center and offsets. Unknown bounds remain NULL.
+Peak arrays stay in mzML, and fragment targets are calculated on demand. Cache format
+7 rebuilds older derived catalogs on opening; saved project definitions are retained.

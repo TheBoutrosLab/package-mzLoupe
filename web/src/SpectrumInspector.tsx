@@ -3,6 +3,9 @@ import { NumberInput, Table } from "@mantine/core";
 import type { Data } from "plotly.js";
 import { Acquisition, Annotation, Psm, Spectrum } from "./api";
 import { Plot } from "./Plot";
+import { FragmentIons } from "./FragmentIons";
+import { FragmentIonTable } from "./FragmentIonTable";
+import type { FragmentSelection } from "./useFragmentSelection";
 
 interface Props {
   source: string;
@@ -10,6 +13,7 @@ interface Props {
   spectrum?: Spectrum;
   candidate?: Psm;
   annotations: Annotation[];
+  fragmentSelection: FragmentSelection;
   fragmentPpm: number | string;
   setFragmentPpm: (value: number | string) => void;
   setCandidate: (candidate: Psm) => void;
@@ -25,6 +29,7 @@ export function SpectrumInspector({
   spectrum,
   candidate,
   annotations,
+  fragmentSelection,
   fragmentPpm,
   setFragmentPpm,
   setCandidate
@@ -42,7 +47,7 @@ export function SpectrumInspector({
       y.push(0, spectrum.intensities[index], null);
     });
     // Annotation indices refer back to the same measured peak arrays.
-    return [
+    const traces = [
       {
         x,
         y,
@@ -58,18 +63,36 @@ export function SpectrumInspector({
         x: annotations.map((item) => spectrum.masses[item.index]),
         y: annotations.map((item) => spectrum.intensities[item.index]),
         text: annotations.map((item) => item.label),
+        customdata: annotations.map((item) => FragmentIons.id(item)),
         mode: "markers+text",
         textposition: "top center",
         marker: {
-          color: "#008979",
-          size: 5
+          color: annotations.map((item) => FragmentIons.color(item)),
+          size: annotations.map((item) =>
+            FragmentIons.id(item) === fragmentSelection.focused ? 9 : 5
+          )
         },
-        textfont: { color: "#008979" },
+        textfont: { color: annotations.map((item) => FragmentIons.color(item)) },
         type: "scatter",
         hovertemplate: "%{text}<br>%{x:.5f} m/z<extra></extra>"
       }
     ] as Data[];
-  }, [spectrum, annotations]);
+    const focused = annotations.find(
+      (item) => FragmentIons.id(item) === fragmentSelection.focused
+    );
+    if (focused) {
+      const mass = spectrum.masses[focused.index];
+      traces.push({
+        x: [mass, mass],
+        y: [0, spectrum.intensities[focused.index]],
+        type: "scatter",
+        mode: "lines",
+        line: { color: FragmentIons.color(focused), width: 3 },
+        hoverinfo: "skip"
+      });
+    }
+    return traces;
+  }, [spectrum, annotations, fragmentSelection.focused]);
 
   return (
     <aside className="panel inspector">
@@ -98,6 +121,12 @@ export function SpectrumInspector({
           {/* Preserve spectrum zoom when switching candidates for the same source and scan. */}
           <Plot
             data={spectrumData}
+            onClick={(event) => {
+              const ion = event.points.find(
+                (item) => typeof item.customdata === "string"
+              );
+              if (ion) fragmentSelection.focus(String(ion.customdata));
+            }}
             layout={{
               uirevision: source + spectrum.ordinal,
               xaxis: { title: { text: "Fragment m/z" } },
@@ -105,6 +134,13 @@ export function SpectrumInspector({
               showlegend: false
             }}
           />
+          {candidate && (
+            <FragmentIonTable
+              key={`${source}:${spectrum.ordinal}:${candidate.id}`}
+              mode={active?.mode}
+              fragments={fragmentSelection}
+            />
+          )}
           <h3>Assignments</h3>
           <Table highlightOnHover>
             <Table.Thead>

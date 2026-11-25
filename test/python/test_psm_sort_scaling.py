@@ -40,11 +40,11 @@ def large_catalog(path: Path, count: int = 45000) -> QueryBudgetCatalog:
     alphabet = "ACDEFGHIKLMNPQRSTVWY"
     with catalog.connect() as connection:
         connection.executemany(
-            "INSERT INTO acquisitions VALUES (?,?,?,?)",
+            "INSERT INTO acquisitions (id,sample,fraction,path,mode) VALUES (?,?,?,?, 'Unknown')",
             [("run", "Sample", "F01", "unused.mzML"), ("other", "Other", "F01", "unused.mzML")],
         )
         connection.executemany(
-            "INSERT INTO scans VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO scans (source,ordinal,native,rt,level,mz,charge) VALUES (?,?,?,?,?,?,?)",
             (("run", index, f"scan={index}", float(index), 2, 500, 2) for index in range(count)),
         )
         candidates = []

@@ -26,6 +26,7 @@ class AcquisitionInput(BaseModel):
     fraction: str = Field(min_length=1)
     mzml: str
     aliases: list[str] = Field(default_factory=list)
+    mode: Literal["DIA", "DDA", "Unknown"] = "Unknown"
 
 
 class SampleInput(BaseModel):
@@ -197,6 +198,22 @@ class XicRequest(BaseModel):
     @model_validator(mode="after")
     def validate_bounds(self) -> XicRequest:
         """Require the extraction interval to end after it starts."""
+        if self.stop <= self.start:
+            raise ValueError("Stop must be greater than start")
+        return self
+
+
+class FragmentXicRequest(BaseModel):
+    """Extract matched peptide fragments over a retention interval in seconds."""
+
+    psm_id: int = Field(gt=0)
+    ppm: float = Field(default=20, gt=0, le=1000, allow_inf_nan=False)
+    start: float = Field(ge=0, allow_inf_nan=False)
+    stop: float = Field(gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> FragmentXicRequest:
+        """Reject reversed or empty extraction intervals."""
         if self.stop <= self.start:
             raise ValueError("Stop must be greater than start")
         return self

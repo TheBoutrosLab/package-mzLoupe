@@ -20,7 +20,7 @@ from mzloupe.storage.registry import ProjectRegistry
 class ProjectRuntime:
     """Keep saved projects independent of cache validity and active browser sessions."""
 
-    cache_version = 6
+    cache_version = 7
 
     def __init__(self, cache: str | Path, registry: str | Path | None = None) -> None:
         """Create the registry and one preparation worker without reading source files."""

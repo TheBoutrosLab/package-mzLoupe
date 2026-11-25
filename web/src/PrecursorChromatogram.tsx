@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Checkbox, Group, NumberInput } from "@mantine/core";
 import type { Data, Layout, PlotRelayoutEvent } from "plotly.js";
-import type { MapData, MapTarget, Psm, Spectrum, Trace } from "./api";
+import type {
+  AcquisitionMode,
+  Annotation,
+  MapData,
+  MapTarget,
+  Psm,
+  Spectrum,
+  Trace
+} from "./api";
 import { useApiRequest } from "./useApiRequest";
 import { Plot } from "./Plot";
 import { PsmMarkers } from "./PsmMarkers";
+import { FragmentChromatograms } from "./FragmentChromatograms";
+import { FragmentXicControls } from "./FragmentXicControls";
+import { useFragmentChromatograms } from "./useFragmentChromatograms";
+import type { FragmentSelection } from "./useFragmentSelection";
 
 interface Props {
   base: string;
   source: string;
   fraction?: string;
+  mode?: AcquisitionMode;
+  annotations: Annotation[];
+  fragmentPpm: number;
+  fragmentSelection: FragmentSelection;
   layer: string;
   map?: MapData;
   spectrum?: Spectrum;
@@ -47,6 +63,10 @@ export function PrecursorChromatogram({
   base,
   source,
   fraction,
+  mode,
+  annotations,
+  fragmentPpm,
+  fragmentSelection,
   layer,
   map,
   spectrum,
@@ -63,6 +83,17 @@ export function PrecursorChromatogram({
   const { run: extractTrace, cancel: cancelExtraction, loading: busy } = useApiRequest();
   const [error, setError] = useState("");
   const [showPsms, setShowPsms] = useState(true);
+  const fragments = useFragmentChromatograms({
+    base,
+    source,
+    mode,
+    candidate: mapTarget ? undefined : candidate,
+    trace,
+    ppm: fragmentPpm,
+    rtRange,
+    matchedCount: annotations.length
+  });
+  const relative = Boolean(fragments.result && fragments.relative);
 
   // Evidence belongs to the submitted extraction, independently of table filters
   // and later edits to the m/z or tolerance controls.
@@ -75,12 +106,28 @@ export function PrecursorChromatogram({
   if (trace) {
     data.push({
       x: trace.rt.map((rt) => rt / 60),
-      y: trace.intensity,
+      y: FragmentChromatograms.intensities(trace.intensity, relative),
       type: "scatter",
       mode: "lines",
       name: "MS1 intensity",
+      opacity:
+        fragments.result &&
+        fragmentSelection.focused &&
+        fragmentSelection.selected.has(fragmentSelection.focused)
+          ? 0.3
+          : 1,
       line: { color: "#008979" }
     });
+    if (fragments.result) {
+      data.push(
+        ...FragmentChromatograms.plot(
+          fragments.result,
+          fragmentSelection.selected,
+          fragments.relative,
+          fragmentSelection.focused
+        )
+      );
+    }
     if (showPsms && psmScans.length) {
       data.push(PsmMarkers.plot(psmScans, layer, candidate?.id));
     }
@@ -289,6 +336,10 @@ export function PrecursorChromatogram({
             : "No matching PSMs in this fraction, time interval, and m/z tolerance (all layers)."}
         </p>
       )}
+      <FragmentXicControls
+        mode={mode}
+        fragments={fragments}
+      />
       {trace && (trace.scan_count > 0 || psmScans.length > 0) ? (
         <Plot
           data={data}
@@ -301,6 +352,11 @@ export function PrecursorChromatogram({
             const psm = trace.psms.find((item) => item.id === point?.customdata);
             if (psm) {
               onPsm(psm);
+            } else {
+              const ion = event.points.find(
+                (item) => typeof item.customdata === "string"
+              );
+              if (ion) fragmentSelection.focus(String(ion.customdata));
             }
           }}
           onZoom={onZoom}
@@ -312,7 +368,7 @@ export function PrecursorChromatogram({
               title: { text: "Retention time (min)" }
             },
             yaxis: {
-              title: { text: "Intensity" },
+              title: { text: relative ? "Relative intensity (%)" : "Intensity" },
               rangemode: "tozero"
             },
             // Marks form a bottom evidence row, separate from measured intensity.

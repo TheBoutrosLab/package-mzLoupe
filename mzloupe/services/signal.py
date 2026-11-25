@@ -6,7 +6,8 @@ from typing import Any
 import numpy as np
 import pyopenms as oms
 
-from mzloupe.models import MapTargetRequest, XicRequest
+from mzloupe.models import FragmentXicRequest, MapTargetRequest, XicRequest
+from mzloupe.services.fragment_xic import FragmentXicExtractor
 from mzloupe.readers.mzml import MzMLReader
 from mzloupe.storage.catalog import ProjectCatalog
 
@@ -30,6 +31,7 @@ class SignalService:
         self.readers: dict[str, MzMLReader] = {}
         self.spectra: dict[tuple[str, int], dict[str, Any]] = {}
         self.traces: dict[tuple[str, float, float, float, float], dict[str, Any]] = {}
+        self.fragment_traces: dict[str, dict[str, Any]] = {}
 
     def reader(self, source: str) -> MzMLReader:
         """Reuse one active index-only reader, rejecting unknown acquisition IDs."""
@@ -168,6 +170,28 @@ class SignalService:
             self.traces[key] = result
         return result
 
+    def fragment_xic(self, request: FragmentXicRequest) -> dict[str, Any]:
+        """Extract all matched b/y ions in one pass over the eligible DIA scans.
+
+        Resolve the PSM on the server so precursor and fragment masses cannot drift
+        away from the selected identification. Retain only the latest bounded result.
+        """
+        key = request.model_dump_json()
+        cached = self.fragment_traces.get(key)
+        if cached is not None:
+            return cached
+        extractor = FragmentXicExtractor(self.catalog)
+        psm = extractor.psm(request.psm_id)
+        spectrum = self.spectrum(psm["source"], psm["ordinal"])
+        targets = FragmentAnnotator().annotate(spectrum, psm["sequence"], request.ppm)
+        if not targets:
+            raise ValueError("No b/y fragments match this PSM at the selected fragment tolerance")
+        result = extractor.extract(request, psm, targets, self.reader(psm["source"]))
+        self.fragment_traces.clear()
+        if result["scan_count"] * len(targets) <= self.max_cached_trace_scans:
+            self.fragment_traces[key] = result
+        return result
+
 
 class FragmentAnnotator:
     """Match theoretical singly charged fragments to the nearest measured peaks."""
@@ -179,17 +203,7 @@ class FragmentAnnotator:
         ppm: float,
     ) -> list[dict[str, int | str | float]]:
         """Label peaks whose mass error falls within the supplied ppm tolerance."""
-        generator = oms.TheoreticalSpectrumGenerator()
-        parameters = generator.getParameters()
-        parameters.setValue("add_metainfo", "true")
-        generator.setParameters(parameters)
-        theoretical = oms.MSSpectrum()
-        generator.getSpectrum(
-            theoretical,
-            oms.AASequence.fromString(sequence),
-            1,
-            1,
-        )
+        theoretical = self.theoretical_spectrum(sequence)
         labels = theoretical.getStringDataArrays()[0]
         masses = np.asarray(spectrum["masses"])
         annotations = []
@@ -204,5 +218,29 @@ class FragmentAnnotator:
             error = (masses[index] - peak.getMZ()) / peak.getMZ() * 1e6
             if abs(error) <= ppm:
                 text = label.decode() if isinstance(label, bytes) else str(label)
-                annotations.append({"index": index, "label": text, "ppm": float(error)})
+                annotations.append(
+                    {
+                        "index": index,
+                        "label": text,
+                        "ppm": float(error),
+                        "mz": float(peak.getMZ()),
+                        "charge": 1,
+                    }
+                )
         return annotations
+
+    @staticmethod
+    def theoretical_spectrum(sequence: str) -> oms.MSSpectrum:
+        """Generate labeled singly charged b/y ions from a modified peptide sequence."""
+        generator = oms.TheoreticalSpectrumGenerator()
+        parameters = generator.getParameters()
+        parameters.setValue("add_metainfo", "true")
+        generator.setParameters(parameters)
+        theoretical = oms.MSSpectrum()
+        generator.getSpectrum(
+            theoretical,
+            oms.AASequence.fromString(sequence),
+            1,
+            1,
+        )
+        return theoretical

@@ -128,8 +128,8 @@ class ProjectPreparer:
             path = str(self.workspace / Path(path).name)
         with catalog.connect() as connection:
             connection.execute(
-                "UPDATE acquisitions SET sample=?, fraction=?, path=? WHERE id=?",
-                (acquisition.sample, acquisition.fraction, path, acquisition.id),
+                "UPDATE acquisitions SET sample=?, fraction=?, path=?, mode=? WHERE id=?",
+                (acquisition.sample, acquisition.fraction, path, acquisition.mode, acquisition.id),
             )
         return True
 
@@ -164,16 +164,23 @@ class ProjectPreparer:
         bounds = self.bounds(reader)
         with catalog.connect() as db:
             db.execute(
-                "INSERT INTO acquisitions VALUES (?,?,?,?)",
-                (acquisition.id, acquisition.sample, acquisition.fraction, str(signal_path)),
+                "INSERT INTO acquisitions VALUES (?,?,?,?,?)",
+                (
+                    acquisition.id,
+                    acquisition.sample,
+                    acquisition.fraction,
+                    str(signal_path),
+                    acquisition.mode,
+                ),
             )
             for ordinal in range(reader.count()):
                 spectrum = reader.metadata(ordinal)
                 precursor = spectrum.getPrecursors()
                 mz = precursor[0].getMZ() if precursor else None
                 charge = precursor[0].getCharge() if precursor else None
+                lower, upper = self.isolation_bounds(precursor)
                 db.execute(
-                    "INSERT INTO scans VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO scans VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         acquisition.id,
                         ordinal,
@@ -182,6 +189,8 @@ class ProjectPreparer:
                         spectrum.getMSLevel(),
                         mz,
                         charge,
+                        lower,
+                        upper,
                     ),
                 )
                 if spectrum.getMSLevel() == 1:
@@ -191,6 +200,30 @@ class ProjectPreparer:
             grid=grid,
             bounds=bounds,
         )
+
+    @staticmethod
+    def isolation_bounds(precursors: list[oms.Precursor]) -> tuple[float | None, float | None]:
+        """Keep only finite, nonempty isolation windows with one unambiguous precursor.
+
+        OpenMS reports positive offsets relative to the isolation center. Zero
+        offsets on both sides usually mean the file did not supply window metadata.
+        Multiple precursor entries need a separate window model and remain unknown.
+        """
+        if len(precursors) != 1:
+            return None, None
+        precursor = precursors[0]
+        center = precursor.getMZ()
+        lower_offset = precursor.getIsolationWindowLowerOffset()
+        upper_offset = precursor.getIsolationWindowUpperOffset()
+        values = (center, lower_offset, upper_offset)
+        if not all(np.isfinite(value) for value in values):
+            return None, None
+        if center <= 0 or min(lower_offset, upper_offset) < 0:
+            return None, None
+        lower, upper = center - lower_offset, center + upper_offset
+        if lower <= 0 or upper <= lower:
+            return None, None
+        return lower, upper
 
     @staticmethod
     def add_ms1_signal(
